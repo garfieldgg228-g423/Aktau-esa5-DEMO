@@ -1,0 +1,30 @@
+Summary:
+
+Thread scope covered: Coordination and decision-making on close approach event between SATELLITE MOON (LUNASAT) and MIA-X01 (MIA-CORPORATION) covering CDMs 9850145153, 9850145154, 9850145155 over 2025-04-25 to 2025-04-29 including maneuver freeze, CDM updates, and final avoidance burn
+
+Operator transitions (if any): No operator change within thread; Operator A (LUNASAT) and Operator B (MIA-CORPORATION) consistent throughout
+
+Messages exchanged (кратко по хронологии):
+
+LUNASAT (25 Apr) alerted MIA-CORP on predicted close approach (CDM 9850145153), requesting maneuver intent and freeze confirmation
+MIA-CORP confirmed maneuverability but no avoidance decision yet, requested clarification on which party maneuvers and timing details
+LUNASAT proposed freeze on non-essential maneuvers, planned internal screening checkpoints, requested station-keeping windows info
+MIA-CORP agreed to freeze barring mission-critical exceptions, noted non-mandatory routine station-keeping, queried OD updates and preferred avoidance direction
+LUNASAT provided new CDM 9850145154, noted lower Pc but some inconsistencies in screen timing, requested freeze confirmation
+MIA-CORP acknowledged CDM, confirmed freeze active, raised questions on further updates and avoidance direction if needed
+LUNASAT scheduled additional screening, gave preferred avoidance direction (cross track positive), advised readiness for possible maneuver request by 29 Apr 20:30 UTC
+MIA-CORP maintained freeze confirmation, suggested querying CDM originator on timing inconsistency, requested decision checkpoint reconfirmation
+LUNASAT issued update with CDM 9850145155 showing Pc increase crossing threshold, requested freeze and maneuver acceptance conditions, cutoff times
+MIA-CORP acknowledged CDM, confirmed freeze, prepared to perform avoidance burn if LUNASAT remains non-maneuvering, requested final LUNASAT intent by 29 Apr 20:30 UTC
+LUNASAT confirmed no planned maneuver, requested MIA perform avoidance burn, confirmed preferred direction and cutoff times
+MIA-CORP executed avoidance burn at 29 Apr 21:12 UTC, reported nominal parameters and transmitted updated ephemeris
+LUNASAT confirmed post-TCA event closure, recorded decision and actions, archived updated ephemeris
+CDMs referenced/updated: CDM 9850145153, 9850145154, 9850145155 all referenced and monitored through thread; progressive updates with changes in collision probability and TCA noted
+
+New CDMs detected: CDM 9850145154 and 9850145155 received and incorporated after initial CDM 9850145153
+
+Operational status (ours vs counterpart): LUNASAT did not execute avoidance maneuver but monitored risk; MIA-CORPORATION maintained freeze then executed avoidance burn as per coordination
+
+Planned actions: Final ephemeris distributed and archived; continued readiness for event screening and maneuver planning per future CDMs and coordination
+
+Pending expectations / monitoring items: No unresolved items; event closed post TCA with full handoff records retained

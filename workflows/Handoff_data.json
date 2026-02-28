@@ -1,0 +1,75 @@
+{
+  "name": "Handoff_data",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "6967547b-e609-4b98-a6f0-51cf38dccee3",
+      "name": "When Executed by Another Workflow",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *\nFROM messages\nWHERE id = $1\nORDER BY created_at ASC, communication_id ASC;",
+        "options": {
+          "queryReplacement": "=$1 ={{ $json.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        224,
+        32
+      ],
+      "id": "ca9ca7d6-e05e-4f7d-a61d-dc7227565743",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "QYLEYG73zSKxPF8q",
+          "name": "Postgres account 3"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "0578ef26-a389-45f7-91f3-45f6a0c18ea7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b4ea4ca9c3070f4ac2566f1d5b9e37f48c892a17b88ab52397ad078af0d98bdb"
+  },
+  "id": "H0mGDKsuvbZ1bAzO",
+  "tags": []
+}

@@ -1,0 +1,275 @@
+{
+  "name": "chart",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "file",
+              "outputPropertyName": "=chart"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -224,
+        32
+      ],
+      "id": "fc979267-447b-43cf-a091-0af19b4345cf",
+      "name": "HTTP Request",
+      "alwaysOutputData": true,
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH all_rows AS (\n  -- CASE 1\n  SELECT\n    'case1'::text AS series,\n    ($1::text || ' vs ' || $2::text) AS series_label,\n    cdm_json,\n    created_at\n  FROM cdm_messages\n  WHERE\n    (lower(trim(pair_a)) = lower(trim($1)) AND lower(trim(pair_b)) = lower(trim($2)))\n    OR\n    (lower(trim(pair_a)) = lower(trim($2)) AND lower(trim(pair_b)) = lower(trim($1)))\n\n  UNION ALL\n\n  -- CASE 2\n  SELECT\n    'case2'::text AS series,\n    ($3::text || ' vs ' || $4::text) AS series_label,\n    cdm_json,\n    created_at\n  FROM cdm_messages\n  WHERE\n    (lower(trim(pair_a)) = lower(trim($3)) AND lower(trim(pair_b)) = lower(trim($4)))\n    OR\n    (lower(trim(pair_a)) = lower(trim($4)) AND lower(trim(pair_b)) = lower(trim($3)))\n\n  UNION ALL\n\n  -- CASE 3\n  SELECT\n    'case3'::text AS series,\n    ($5::text || ' vs ' || $6::text) AS series_label,\n    cdm_json,\n    created_at\n  FROM cdm_messages\n  WHERE\n    (lower(trim(pair_a)) = lower(trim($5)) AND lower(trim(pair_b)) = lower(trim($6)))\n    OR\n    (lower(trim(pair_a)) = lower(trim($6)) AND lower(trim(pair_b)) = lower(trim($5)))\n\n  UNION ALL\n\n  -- CASE 4\n  SELECT\n    'case4'::text AS series,\n    ($7::text || ' vs ' || $8::text) AS series_label,\n    cdm_json,\n    created_at\n  FROM cdm_messages\n  WHERE\n    (lower(trim(pair_a)) = lower(trim($7)) AND lower(trim(pair_b)) = lower(trim($8)))\n    OR\n    (lower(trim(pair_a)) = lower(trim($8)) AND lower(trim(pair_b)) = lower(trim($7)))\n),\n\nbase AS (\n  SELECT\n    series,\n    series_label,\n    cdm_json,\n    COALESCE(\n      NULLIF(cdm_json::jsonb->>'creation_date','')::timestamptz,\n      created_at\n    ) AS creation_ts\n  FROM all_rows\n),\n\nranked0 AS (\n  SELECT\n    series,\n    series_label,\n    cdm_json,\n    creation_ts,\n    row_number() OVER (\n      PARTITION BY series\n      ORDER BY creation_ts ASC\n    ) AS rn\n  FROM base\n),\n\nranked AS (\n  SELECT\n    series,\n    series_label,\n    rn AS cdm_n,\n    ('CDM #' || rn) AS cdm_label,\n    creation_ts AS creation_date,\n\n    -- Miss distance (m)\n    NULLIF(cdm_json::jsonb #>> '{relative_metadata_data,miss_distance,value}', '')::float8 AS miss_m,\n\n    -- Collision probability (Pc)\n    NULLIF(cdm_json::jsonb #>> '{relative_metadata_data,collision_probability}', '')::float8 AS pc,\n\n    -- Covariance diag terms (m^2) from each object (RTN)\n    NULLIF(cdm_json::jsonb #>> '{objects,object1,covariance_rtn,pos_pos,cr_r}', '')::float8 AS c1_rr,\n    NULLIF(cdm_json::jsonb #>> '{objects,object1,covariance_rtn,pos_pos,ct_t}', '')::float8 AS c1_tt,\n    NULLIF(cdm_json::jsonb #>> '{objects,object1,covariance_rtn,pos_pos,cn_n}', '')::float8 AS c1_nn,\n\n    NULLIF(cdm_json::jsonb #>> '{objects,object2,covariance_rtn,pos_pos,cr_r}', '')::float8 AS c2_rr,\n    NULLIF(cdm_json::jsonb #>> '{objects,object2,covariance_rtn,pos_pos,ct_t}', '')::float8 AS c2_tt,\n    NULLIF(cdm_json::jsonb #>> '{objects,object2,covariance_rtn,pos_pos,cn_n}', '')::float8 AS c2_nn\n  FROM ranked0\n)\n\nSELECT *\nFROM ranked\nORDER BY series, creation_date;",
+        "options": {
+          "queryReplacement": "=$1 = {{ $json.pair_a }}\n$2 = {{ $json.pair_b }}\n$3 = {{ $json['pair_a(other)'] }}\n$4 = {{ $json['pair_b(other)'] }}\n$5 = {{ $json['pair_a(other1)'] }}\n$6 = {{ $json['pair_b(other1)'] }}\n$7 ={{ $json['pair_a(other2)'] }}\n$8 ={{ $json['pair_b(other2)'] }}\n"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1008,
+        144
+      ],
+      "id": "3aa78a32-1fd7-4ee5-8498-514a038614fd",
+      "name": "Execute a SQL query2",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2fetuh0Apnozq8Vi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\n\n// --- настройки ---\nconst W = 1100;\nconst H = 900;\n\n// если true — упадёт ошибкой, если нет данных\nconst THROW_IF_EMPTY = true;\n\n// --- helpers ---\nfunction colorForIndex(i) {\n  const hue = (i * 47) % 360;                 // детерминированно разные цвета\n  return `hsl(${hue}, 70%, 50%)`;\n}\n\nfunction sortByN(arr) { arr.sort((a, b) => a.n - b.n); }\n\nfunction toAlignedData(points, maxN) {\n  const arr = Array(maxN).fill(null);\n  for (const p of points) {\n    const idx = p.n - 1;\n    if (idx >= 0 && idx < maxN) arr[idx] = p.y;\n  }\n  return arr;\n}\n\nfunction makeChart(titleY, datasets, yOptions = {}) {\n  return {\n    type: 'line',\n    data: { labels, datasets },\n    options: {\n      scales: {\n        x: { title: { display: true, text: 'CDM (old → new)' } },\n        y: {\n          title: { display: true, text: titleY },\n          ticks: { maxTicksLimit: 14 },\n          ...yOptions\n        }\n      },\n      plugins: {\n        legend: { display: true }\n      }\n    }\n  };\n}\n\nfunction makeUrl(chartConfig) {\n  return `https://quickchart.io/chart?width=${W}&height=${H}&format=png&c=` +\n    encodeURIComponent(JSON.stringify(chartConfig));\n}\n\n// --- group by pair_key ---\nconst byPair = new Map();\n\nfor (const r of rows) {\n  const pair = String(r.pair_key ?? '').trim();\n  if (!pair) continue;\n\n  const n = Number(r.cdm_n);\n  if (!Number.isFinite(n) || n <= 0) continue;\n\n  if (!byPair.has(pair)) {\n    byPair.set(pair, { miss: [], pc: [], sig: [] });\n  }\n  const g = byPair.get(pair);\n\n  // miss\n  const miss = Number(r.miss_m);\n  if (Number.isFinite(miss)) g.miss.push({ n, y: miss });\n\n  // pc (только >0)\n  const pc = Number(r.pc);\n  if (Number.isFinite(pc) && pc > 0) g.pc.push({ n, y: pc });\n\n  // covariance overall 1σ (m): sqrt(rr+tt+nn), где rr/tt/nn — суммы вариансов двух объектов\n  const rr = Number(r.c1_rr) + Number(r.c2_rr);\n  const tt = Number(r.c1_tt) + Number(r.c2_tt);\n  const nn = Number(r.c1_nn) + Number(r.c2_nn);\n\n  if (Number.isFinite(rr) && Number.isFinite(tt) && Number.isFinite(nn)) {\n    const varSum = Math.max(0, rr) + Math.max(0, tt) + Math.max(0, nn);\n    const sigOverall = Math.sqrt(varSum);\n    if (Number.isFinite(sigOverall)) g.sig.push({ n, y: sigOverall });\n  }\n}\n\nconst pairs = Array.from(byPair.keys());\nif (!pairs.length) {\n  if (THROW_IF_EMPTY) throw new Error('Нет данных: ни одного pair_key с валидным cdm_n.');\n  return [];\n}\n\n// --- sort + find maxN ---\nlet maxN = 0;\nfor (const pair of pairs) {\n  const g = byPair.get(pair);\n  sortByN(g.miss); sortByN(g.pc); sortByN(g.sig);\n\n  for (const arr of [g.miss, g.pc, g.sig]) {\n    if (arr.length) maxN = Math.max(maxN, arr[arr.length - 1].n);\n  }\n}\n\nif (!maxN) {\n  if (THROW_IF_EMPTY) throw new Error('Нет данных для графиков (все серии пустые).');\n  return [];\n}\n\nconst labels = Array.from({ length: maxN }, (_, i) => `CDM #${i + 1}`);\n\n// --- build datasets per metric ---\nfunction buildDatasets(metric) {\n  const out = [];\n  pairs.forEach((pair, idx) => {\n    const g = byPair.get(pair);\n    const data = toAlignedData(g[metric], maxN);\n    const c = colorForIndex(idx);\n    out.push({\n      label: `pair_key=${pair}`,\n      data,\n      fill: false,\n      spanGaps: true,\n      borderColor: c,\n      backgroundColor: c,\n      pointRadius: 4,\n      pointHoverRadius: 6,\n      borderWidth: 2,\n      tension: 0\n    });\n  });\n  return out;\n}\n\n// 1) Miss\nconst missChart = makeChart(\n  'Miss distance (m)',\n  buildDatasets('miss')\n);\n\n// 2) Pc (линейная; если хочешь лог-ось — скажи)\nconst pcChart = makeChart(\n  'Collision Probability (Pc)',\n  buildDatasets('pc')\n);\n\n// 3) Cov overall 1σ\nconst sigChart = makeChart(\n  'Overall 1σ (m) from RTN covariance',\n  buildDatasets('sig')\n);\n\nreturn [\n  { json: { kind: 'miss', pair_keys: pairs, url: makeUrl(missChart) } },\n  { json: { kind: 'pc',   pair_keys: pairs, url: makeUrl(pcChart) } },\n  { json: { kind: 'cov',  pair_keys: pairs, url: makeUrl(sigChart) } },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        112
+      ],
+      "id": "7f023fcb-03bc-4073-acb6-ce04b351b380",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "pair_a"
+            },
+            {
+              "name": "pair_b"
+            },
+            {
+              "name": "pair_a(other)"
+            },
+            {
+              "name": "pair_b(other)"
+            },
+            {
+              "name": "обьяснение "
+            },
+            {
+              "name": "pair_a(other1)"
+            },
+            {
+              "name": "pair_b(other1)"
+            },
+            {
+              "name": "pair_a(other2)"
+            },
+            {
+              "name": "pair_b(other2)"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1312,
+        112
+      ],
+      "id": "a02ccf0d-2b76-4bea-bb13-6284dd6b662d",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "sendTo": "garfieldgg228@gmail.com",
+        "subject": "График",
+        "message": "=there is charts",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "chart_1"
+              },
+              {
+                "property": "chart_1"
+              },
+              {
+                "property": "chart_2"
+              },
+              {
+                "property": "chart_3"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        192,
+        0
+      ],
+      "id": "6d805399-897d-4f8c-b769-c16e250a1fd0",
+      "name": "Send a message",
+      "webhookId": "50a90302-3f2b-4b68-87dd-871211745016",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "osUxvJMgVC7dMxtR",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst out = {\n  json: { requested: items.length, included: 0, details: [] },\n  binary: {},\n};\n\nlet k = 1;\n\nfor (let i = 0; i < items.length; i++) {\n  const bin = items[i].binary || {};\n  const keys = Object.keys(bin);\n\n  if (keys.length === 0) {\n    out.json.details.push({ item: i, ok: false, reason: \"no binary\" });\n    continue;\n  }\n\n  // приоритет: chart -> data -> первый попавшийся ключ\n  const srcKey = bin.chart ? \"chart\" : (bin.data ? \"data\" : keys[0]);\n  const b = bin[srcKey];\n\n  const dstKey = `chart_${k}`; // ключ БЕЗ .png\n  out.binary[dstKey] = {\n    ...b,\n    fileName: `chart_${k}.png`,           // имя файла уже с .png\n    mimeType: b.mimeType || \"image/png\",\n  };\n\n  out.json.details.push({ item: i, ok: true, from: srcKey, to: dstKey });\n  out.json.included++;\n  k++;\n}\n\nreturn [out];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "529dac35-4f17-48f8-9323-8cd182199c7b",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH pairs(ord, series, pair_a, pair_b) AS (\n  VALUES\n    (1, 'case1'::text, $1::text, $2::text),\n    (2, 'case2'::text, $3::text, $4::text),\n    (3, 'case3'::text, $5::text, $6::text),\n    (4, 'case4'::text, $7::text, $8::text)\n),\ncanon_pairs AS (\n  SELECT\n    series,\n    least(upper(trim(pair_a)), upper(trim(pair_b)))    AS a_can,\n    greatest(upper(trim(pair_a)), upper(trim(pair_b))) AS b_can\n  FROM pairs\n  WHERE pair_a IS NOT NULL AND pair_b IS NOT NULL\n    AND trim(pair_a) <> '' AND trim(pair_b) <> ''\n),\ndiff_keys AS (\n  SELECT\n    least(upper(trim(pair_a)), upper(trim(pair_b)))    AS a_can,\n    greatest(upper(trim(pair_a)), upper(trim(pair_b))) AS b_can,\n    MIN(pair_key) AS pair_key              -- pair_key не меняется -> хватает MIN\n  FROM difference\n  WHERE pair_a IS NOT NULL AND pair_b IS NOT NULL\n    AND trim(pair_a) <> '' AND trim(pair_b) <> ''\n    AND pair_key IS NOT NULL AND trim(pair_key) <> ''\n  GROUP BY 1,2\n),\npair_map AS (\n  SELECT\n    cp.series,\n    dk.pair_key\n  FROM canon_pairs cp\n  LEFT JOIN diff_keys dk\n    ON dk.a_can = cp.a_can AND dk.b_can = cp.b_can\n),\ninput_rows AS (\n  SELECT value AS j\n  FROM jsonb_array_elements($9::jsonb)\n)\nSELECT\n  j->>'series'       AS series,\n  j->>'series_label' AS series_label,\n  j->>'cdm_n'        AS cdm_n,\n  j->>'cdm_label'    AS cdm_label,\n  j->>'creation_date' AS creation_date,\n\n  NULLIF(j->>'miss_m','')::float8 AS miss_m,\n  NULLIF(j->>'pc','')::float8     AS pc,\n\n  NULLIF(j->>'c1_rr','')::float8 AS c1_rr,\n  NULLIF(j->>'c1_tt','')::float8 AS c1_tt,\n  NULLIF(j->>'c1_nn','')::float8 AS c1_nn,\n\n  NULLIF(j->>'c2_rr','')::float8 AS c2_rr,\n  NULLIF(j->>'c2_tt','')::float8 AS c2_tt,\n  NULLIF(j->>'c2_nn','')::float8 AS c2_nn,\n\n  pm.pair_key        AS pair_key\n\nFROM input_rows\nLEFT JOIN pair_map pm\n  ON pm.series = (j->>'series')\nORDER BY series, NULLIF(j->>'cdm_n','')::int;",
+        "options": {
+          "queryReplacement": "=$1 = {{ $('When Executed by Another Workflow').item.json.pair_a }}\n$2 = {{ $('When Executed by Another Workflow').item.json.pair_b }}\n$3 = {{ $('When Executed by Another Workflow').item.json['pair_a(other)'] }}\n$4 = {{ $('When Executed by Another Workflow').item.json['pair_b(other)'] }}\n$5 = {{ $('When Executed by Another Workflow').item.json['pair_a(other1)'] }}\n$6 ={{ $('When Executed by Another Workflow').item.json['pair_b(other1)'] }}\n$7 = {{ $('When Executed by Another Workflow').item.json['pair_a(other2)'] }}\n$8 ={{ $('When Executed by Another Workflow').item.json['pair_b(other2)'] }}\n$9 = {{ JSON.stringify($input.all().map(i => i.json)) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -784,
+        144
+      ],
+      "id": "be6a35d1-aa83-40c5-b181-b888d038d153",
+      "name": "Execute a SQL query",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "BS3jzABtgD6WMJ0p",
+          "name": "Postgres account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query2": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "5bea5b2b-7c41-449d-a0bf-9a3cae666486",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b4ea4ca9c3070f4ac2566f1d5b9e37f48c892a17b88ab52397ad078af0d98bdb"
+  },
+  "id": "pFWavyZYNdprhQKz",
+  "tags": []
+}

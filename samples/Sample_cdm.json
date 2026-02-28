@@ -1,0 +1,348 @@
+{
+  "objects": {
+    "object1": {
+      "metadata": {
+        "object": "OBJECT1",
+        "ref_frame": "EME6000",
+        "earth_tides": false,
+        "object_name": "ALMATY-OBS-7",
+        "object_type": "PAYLOAD",
+        "catalog_name": "LEOLAB",
+        "maneuverable": true,
+        "gravity_model": "EGM-96: 36D 36O",
+        "ephemeris_name": "EPHEM-ALMATY-OBS-7-20250810",
+        "intrack_thrust": true,
+        "operator_email": "ops@almatyobs.kz",
+        "operator_phone": "+77273550101",
+        "atmospheric_model": "JACCHIA 70 DCA",
+        "covariance_method": "CALCULATED",
+        "object_designator": "220611A",
+        "solar_rad_pressure": true,
+        "n_body_perturbations": [
+          "MOON",
+          "SUN"
+        ],
+        "operator_organization": "ALMATY ORBITAL",
+        "international_designator": "2022-061AB",
+        "operator_contact_position": "FDO"
+      },
+      "od_quality": {
+        "obs_used": 544,
+        "tracks_used": 112,
+        "weighted_rms": 0.923,
+        "obs_available": 582,
+        "actual_od_span": {
+          "unit": "d",
+          "value": 5.12
+        },
+        "time_lastob_end": "2025-08-10T16:18:44.210",
+        "tracks_available": 126,
+        "time_lastob_start": "2025-08-10T08:02:19.210",
+        "residuals_accepted": {
+          "unit": "%",
+          "value": 91.6
+        },
+        "recommended_od_span": {
+          "unit": "d",
+          "value": 7.25
+        }
+      },
+      "state_vector": {
+        "position_km": {
+          "x": 3184.221905,
+          "y": 1892.440613,
+          "z": 6182.903177
+        },
+        "velocity_kmps": {
+          "x_dot": 4.221551904,
+          "y_dot": 5.041998112,
+          "z_dot": -3.401772221
+        }
+      },
+      "covariance_rtn": {
+        "units": {
+          "pos_pos": "m^2",
+          "pos_vel": "m^2/s",
+          "srp_srp": "m^4/kg^2",
+          "vel_vel": "m^2/s^2",
+          "srp_drag": "m^4/kg^2",
+          "drag_drag": "m^4/kg^2",
+          "srp_sensitivity": "m^3/kg",
+          "drag_sensitivity": "m^3/kg",
+          "srp_sensitivity_rate": "m^3/(kg*s)",
+          "drag_sensitivity_rate": "m^3/(kg*s)"
+        },
+        "pos_pos": {
+          "cn_n": 118.62,
+          "cn_r": -31.14,
+          "cn_t": 22.09,
+          "cr_r": 76.85,
+          "ct_r": -16.92,
+          "ct_t": 3924.8
+        },
+        "pos_vel": {
+          "cndot_n": 0.01544,
+          "cndot_r": 0.001746,
+          "cndot_t": -0.004812,
+          "crdot_n": 0.001218,
+          "crdot_r": 0.003744,
+          "crdot_t": -7.842,
+          "ctdot_n": -0.001944,
+          "ctdot_r": -0.01388,
+          "ctdot_t": 0.005312
+        },
+        "vel_vel": {
+          "cndot_ndot": 0.00007122,
+          "cndot_rdot": -0.00000392,
+          "cndot_tdot": -0.00000183,
+          "crdot_rdot": 0.006881,
+          "ctdot_rdot": -0.00001741,
+          "ctdot_tdot": 0.00001293
+        },
+        "srp_sensitivity": {
+          "csrp_n": -21.84,
+          "csrp_r": -158.3,
+          "csrp_t": 246.7,
+          "csrp_drg": 0.000247,
+          "csrp_srp": 0.01674,
+          "csrp_ndot": -0.00498,
+          "csrp_rdot": -0.00139,
+          "csrp_tdot": 0.02231
+        },
+        "drag_sensitivity": {
+          "cdrg_n": -0.332,
+          "cdrg_r": -2.041,
+          "cdrg_t": 3.812,
+          "cdrg_drg": 0.000003901,
+          "cdrg_ndot": -0.00007211,
+          "cdrg_rdot": -0.0001324,
+          "cdrg_tdot": 0.0002812
+        }
+      },
+      "additional_parameters": {
+        "mass": {
+          "unit": "kg",
+          "value": 389.8
+        },
+        "sedr": {
+          "unit": "W/kg",
+          "value": 0.000038914
+        },
+        "area_pc": {
+          "unit": "m^2",
+          "value": 5.1
+        },
+        "inclination_deg": 97.4,
+        "cd_area_over_mass": {
+          "unit": "m^2/kg",
+          "value": 0.03902
+        },
+        "cr_area_over_mass": {
+          "unit": "m^2/kg",
+          "value": 0.06844
+        },
+        "apogee_altitude_km": 810,
+        "perigee_altitude_km": 720,
+        "thrust_acceleration": {
+          "unit": "m/s^2",
+          "value": 0
+        }
+      }
+    },
+    "object2": {
+      "metadata": {
+        "object": "OBJECT2",
+        "ref_frame": "EME6000",
+        "earth_tides": false,
+        "object_name": "TENGRI-NAV-2",
+        "object_type": "PAYLOAD",
+        "catalog_name": "SATCAT",
+        "maneuverable": true,
+        "gravity_model": "EGM-96: 36D 36O",
+        "ephemeris_name": "EPHEM-TENGRI-NAV-2-20250810",
+        "intrack_thrust": false,
+        "atmospheric_model": "JACCHIA 70 DCA",
+        "covariance_method": "CALCULATED",
+        "object_designator": "180991C",
+        "solar_rad_pressure": false,
+        "n_body_perturbations": [
+          "MOON",
+          "SUN"
+        ],
+        "international_designator": "2018-099CC"
+      },
+      "od_quality": {
+        "obs_used": 57,
+        "tracks_used": 14,
+        "weighted_rms": 0.981,
+        "obs_available": 66,
+        "actual_od_span": {
+          "unit": "d",
+          "value": 2.18
+        },
+        "time_lastob_end": "2025-08-10T16:47:12.555",
+        "tracks_available": 16,
+        "time_lastob_start": "2025-08-10T09:31:22.555",
+        "residuals_accepted": {
+          "unit": "%",
+          "value": 76.3
+        },
+        "recommended_od_span": {
+          "unit": "d",
+          "value": 2.74
+        }
+      },
+      "state_vector": {
+        "position_km": {
+          "x": 3180.914118,
+          "y": 1897.701552,
+          "z": 6179.661004
+        },
+        "velocity_kmps": {
+          "x_dot": -2.771882114,
+          "y_dot": -6.188114771,
+          "z_dot": 3.251040551
+        }
+      },
+      "covariance_rtn": {
+        "units": {
+          "pos_pos": "m^2",
+          "pos_vel": "m^2/s",
+          "srp_srp": "m^4/kg^2",
+          "vel_vel": "m^2/s^2",
+          "srp_drag": "m^4/kg^2",
+          "drag_drag": "m^4/kg^2",
+          "srp_sensitivity": "m^3/kg",
+          "drag_sensitivity": "m^3/kg",
+          "srp_sensitivity_rate": "m^3/(kg*s)",
+          "drag_sensitivity_rate": "m^3/(kg*s)"
+        },
+        "pos_pos": {
+          "cn_n": 146.88,
+          "cn_r": -61.52,
+          "cn_t": -1042.3,
+          "cr_r": 1824.6,
+          "ct_r": -67210.4,
+          "ct_t": 3124600
+        },
+        "pos_vel": {
+          "cndot_n": 0.00011234,
+          "cndot_r": 0.005211,
+          "cndot_t": 0.010214,
+          "crdot_n": -0.00000244,
+          "crdot_r": 0.003104,
+          "crdot_t": -0.05218,
+          "ctdot_n": 0.001982,
+          "ctdot_r": -0.01214,
+          "ctdot_t": -0.000198
+        },
+        "vel_vel": {
+          "cndot_ndot": 0.00006184,
+          "cndot_rdot": -0.00000228,
+          "cndot_tdot": -0.00000538,
+          "crdot_rdot": 0.00009421,
+          "ctdot_rdot": -0.00000361,
+          "ctdot_tdot": 0.00001211
+        },
+        "srp_sensitivity": {
+          "csrp_n": -7.114,
+          "csrp_r": -41.22,
+          "csrp_t": 98.77,
+          "csrp_drg": 0.0000712,
+          "csrp_srp": 0.004612,
+          "csrp_ndot": -0.00141,
+          "csrp_rdot": -0.00501,
+          "csrp_tdot": 0.00549
+        },
+        "drag_sensitivity": {
+          "cdrg_n": -0.1086,
+          "cdrg_r": -0.6231,
+          "cdrg_t": 1.512,
+          "cdrg_drg": 0.000001214,
+          "cdrg_ndot": -0.00002244,
+          "cdrg_rdot": -0.00008311,
+          "cdrg_tdot": 0.00008192
+        }
+      },
+      "additional_parameters": {
+        "mass": {
+          "unit": "kg",
+          "value": 402.6
+        },
+        "sedr": {
+          "unit": "W/kg",
+          "value": 0.005812
+        },
+        "area_pc": {
+          "unit": "m^2",
+          "value": 1.1
+        },
+        "inclination_deg": 97.4,
+        "cd_area_over_mass": {
+          "unit": "m^2/kg",
+          "value": 0.11281
+        },
+        "cr_area_over_mass": {
+          "unit": "m^2/kg",
+          "value": 0.05862
+        },
+        "apogee_altitude_km": 805,
+        "perigee_altitude_km": 725,
+        "thrust_acceleration": {
+          "unit": "m/s^2",
+          "value": 0
+        }
+      }
+    }
+  },
+  "message_id": "682410201",
+  "originator": "AKTAU-OPS",
+  "message_for": "AKTAU-CONJUNCTION-DESK",
+  "creation_date": "2025-08-10T19:10:05.123",
+  "ccsds_cdm_vers": "1.0",
+  "relative_metadata_data": {
+    "tca": "2025-08-15T01:40:22.500",
+    "miss_distance": {
+      "unit": "m",
+      "value": 2140
+    },
+    "screen_volume": {
+      "x": {
+        "unit": "m",
+        "value": 220
+      },
+      "y": {
+        "unit": "m",
+        "value": 1000
+      },
+      "z": {
+        "unit": "m",
+        "value": 1000
+      },
+      "frame": "RTN",
+      "shape": "ELLIPSOID"
+    },
+    "relative_speed": {
+      "unit": "m/s",
+      "value": 14510
+    },
+    "screen_exit_time": "2025-08-15T01:40:22.716",
+    "screen_entry_time": "2025-08-15T01:40:22.184",
+    "collision_probability": 0.0000049,
+    "stop_screen_period_raw": "2025-08-15T18:22:10.000",
+    "relative_position_rtn_m": {
+      "n": 1540.2,
+      "r": 52.3,
+      "t": -140.6
+    },
+    "start_screen_period_raw": "2025-08-12T18:22:10.000",
+    "relative_velocity_rtn_mps": {
+      "n": -1420.4,
+      "r": -8.1,
+      "t": -14420.8
+    },
+    "stop_screen_period_iso_fix": "2025-08-15T18:22:10.000",
+    "start_screen_period_iso_fix": "2025-08-12T18:22:10.000",
+    "collision_probability_method": "FOSTER-1992"
+  }
+}

@@ -1,0 +1,313 @@
+{
+  "name": "FEASIBILLITY_BASE",
+  "nodes": [
+    {
+      "parameters": {
+        "sendTo": "garfieldgg228@gmail.com",
+        "subject": "warn",
+        "message": "=WARNING!  {{ $('Code in JavaScript1').item.json.warning }}   {{ $('Code in JavaScript1').item.json.warning_level }}    please check your health_status\nSatellite = {{ $('Code in JavaScript1').item.json.satellite }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        384,
+        240
+      ],
+      "id": "6c54bdb7-a2c1-406a-a7cc-e4f798403058",
+      "name": "Send a message",
+      "webhookId": "13752abb-2675-4769-a0d9-303fec998d2c",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "osUxvJMgVC7dMxtR",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "43d63765-0199-4f55-93e3-65954d292d9e",
+              "leftValue": "={{$json.warning_level}}",
+              "rightValue": "NONE",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        176,
+        400
+      ],
+      "id": "046ba8f1-a9f8-4e8b-ba17-0bbfa7f71c2f",
+      "name": "If",
+      "executeOnce": true,
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO health_status (\n  satellite,\n  time_id,\n  creation_date,\n  info,\n  warning,\n  update_info\n)\nVALUES (\n  $1::text,                         -- satellite\n  $2::text,                         -- time_id\n  $3::timestamptz,                  -- creation_date (старт окна)\n  $4::jsonb,                        -- новый полный snapshot\n  NULLIF($5::text, ''),             -- warning (может быть пусто)\n  jsonb_build_array(                -- первая запись истории\n    jsonb_build_object(\n      'update_time_utc', $6::TIMESTAMPTZ,\n      'changes', COALESCE($7::jsonb, '[]'::jsonb)\n    )\n  )\n)\nON CONFLICT (satellite, time_id) DO UPDATE\nSET\n  -- 1) creation_date НЕ трогаем (старт окна остаётся прежним)\n  info = EXCLUDED.info,             -- 2) полный overwrite info\n\n  -- 3) дописываем warning, если пришёл\n  warning = CASE\n    WHEN EXCLUDED.warning IS NULL THEN health_status.warning\n    WHEN health_status.warning IS NULL OR health_status.warning = '' THEN EXCLUDED.warning\n    ELSE health_status.warning || E'\\n' || EXCLUDED.warning\n  END,\n\n  -- 4) update_info: append новой записи (дата + changes)\n  update_info = COALESCE(health_status.update_info, '[]'::jsonb) ||\n    jsonb_build_array(\n      jsonb_build_object(\n        'update_time_utc', $6::timestamptz,\n        'changes', COALESCE($7::jsonb, '[]'::jsonb)\n      )\n    );",
+        "options": {
+          "queryReplacement": "=$1 = {{ $('Code in JavaScript1').item.json.satellite }}\n$2 = {{ $('Code in JavaScript1').item.json.time_id_to_use }}\n$3 = {{ $('Code in JavaScript1').item.json.info_new.message_creation_time_utc }}\n$4 = {{ JSON.stringify($('Code in JavaScript1').item.json.info_new) }}\n$5 = {{ $('Code in JavaScript1').item.json.warning }}\n$6 = {{ $('Code in JavaScript1').item.json.update_time_utc }}\n$7 = {{ JSON.stringify($('Code in JavaScript1').item.json.changes || []) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        496,
+        384
+      ],
+      "id": "1410b96c-2a1c-430c-88c6-707cdad4c940",
+      "name": "Execute a SQL query4",
+      "credentials": {
+        "postgres": {
+          "id": "h2S4iiYTaQE9EyxV",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node (JavaScript) — robust extractor for HEALTH_STATUS_SNAPSHOT\n\nconst items = $input.all();\n\nfunction toIso(ts) {\n  if (!ts) return null;\n  const d = new Date(ts);\n  return isNaN(d.getTime()) ? null : d.toISOString();\n}\n\nfunction tryParseJsonString(s) {\n  if (typeof s !== 'string') return null;\n  const t = s.trim();\n\n  // 1) normal parse\n  try {\n    let v = JSON.parse(t);\n\n    // handle double-encoded JSON: \"\\\"{...}\\\"\"\n    if (typeof v === 'string') {\n      try { v = JSON.parse(v); } catch {}\n    }\n    return v;\n  } catch {}\n\n  // 2) salvage: extract first {...} or [...]\n  const firstObj = t.indexOf('{');\n  const lastObj  = t.lastIndexOf('}');\n  if (firstObj !== -1 && lastObj !== -1 && lastObj > firstObj) {\n    const sub = t.slice(firstObj, lastObj + 1);\n    try { return JSON.parse(sub); } catch {}\n  }\n\n  const firstArr = t.indexOf('[');\n  const lastArr  = t.lastIndexOf(']');\n  if (firstArr !== -1 && lastArr !== -1 && lastArr > firstArr) {\n    const sub = t.slice(firstArr, lastArr + 1);\n    try { return JSON.parse(sub); } catch {}\n  }\n\n  return null;\n}\n\nfunction looksLikeSnapshot(o) {\n  return o && typeof o === 'object' && (\n    o.message_type === 'HEALTH_STATUS_SNAPSHOT' ||\n    o.spacecraft_name ||\n    o.spacecraft_id\n  );\n}\n\nfunction extractSnapshot(root) {\n  const candidates = [\n    { k: 'root', v: root },\n    { k: 'info', v: root?.info },\n    { k: 'Info', v: root?.Info },\n    { k: 'info_json', v: root?.info_json },\n    { k: 'Info_json', v: root?.Info_json },\n    { k: 'payload', v: root?.payload },\n    { k: 'data', v: root?.data },\n    { k: 'snapshot', v: root?.snapshot },\n    { k: 'state', v: root?.state }\n  ];\n\n  for (const c of candidates) {\n    let v = c.v;\n\n    // if it's a string, parse it\n    if (typeof v === 'string') v = tryParseJsonString(v);\n\n    // if it parsed into array, take first object\n    if (Array.isArray(v)) v = v.find(x => typeof x === 'object') || null;\n\n    if (looksLikeSnapshot(v)) return { snap: v, foundAt: c.k };\n  }\n\n  return { snap: null, foundAt: 'NOT_FOUND' };\n}\n\nreturn items.map((item) => {\n  const root = item.json || {};\n  const { snap, foundAt } = extractSnapshot(root);\n\n  const spacecraft_name = snap?.spacecraft_name || null;\n  const spacecraft_id   = snap?.spacecraft_id   || null;\n\n  // satellite = spacecraft_name (как ты хочешь)\n  const satellite = spacecraft_name || spacecraft_id || \"UNKNOWN\";\n\n  const creation_date =\n    toIso(snap?.message_creation_time_utc) ||\n    toIso(root?.creation_date) ||\n    new Date().toISOString();\n\n  const info_json = snap ? JSON.stringify(snap) : null;\n\n  return {\n    json: {\n      // \"табличные\" колонки для просмотра\n      satellite,\n      creation_date,\n      message_id: snap?.message_id || null,\n      spacecraft_id,\n      debug_found_at: foundAt,\n\n      // для SQL placeholders\n      sql_params: {\n        \"$1\": satellite,\n        \"$2\": creation_date,\n        \"$3\": info_json\n      },\n\n      // если хочешь видеть целиком\n      info_json\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        384
+      ],
+      "id": "964e7df5-59b2-438b-bad2-d04fb9274765",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node (JavaScript)\n// Вход: 2 items (new + old). Может быть:\n// - чистые snapshots\n// - или SQL-row где new в info_new, old в prev_info (json/json-string)\n// Выход: 1 item с diff (changes[]) + update_info_patch (1 элемент массива)\n\nconst items = $input.all().map(i => i.json);\n\nfunction safeParse(v) {\n  if (v == null) return null;\n  if (typeof v === 'object') return v;\n  if (typeof v !== 'string') return null;\n\n  const s = v.trim();\n  try {\n    let x = JSON.parse(s);\n    if (typeof x === 'string') {\n      try { x = JSON.parse(x); } catch {}\n    }\n    return x;\n  } catch {}\n\n  // salvage {...}\n  const a = s.indexOf('{');\n  const b = s.lastIndexOf('}');\n  if (a !== -1 && b !== -1 && b > a) {\n    try { return JSON.parse(s.slice(a, b + 1)); } catch {}\n  }\n  return null;\n}\n\nfunction pickSnapshot(x) {\n  if (!x) return null;\n\n  // direct snapshot\n  if (x.message_type === 'HEALTH_STATUS_SNAPSHOT') return x;\n\n  // sql row shapes\n  if (x.info_new) {\n    const p = safeParse(x.info_new);\n    if (p?.message_type === 'HEALTH_STATUS_SNAPSHOT') return p;\n  }\n  if (x.prev_info) {\n    const p = safeParse(x.prev_info);\n    if (p?.message_type === 'HEALTH_STATUS_SNAPSHOT') return p;\n  }\n\n  // common wrappers\n  if (x.info && typeof x.info === 'object' && x.info.message_type === 'HEALTH_STATUS_SNAPSHOT') return x.info;\n  if (x.Info && typeof x.Info === 'object' && x.Info.message_type === 'HEALTH_STATUS_SNAPSHOT') return x.Info;\n\n  const pInfo = safeParse(x.info);\n  if (pInfo?.message_type === 'HEALTH_STATUS_SNAPSHOT') return pInfo;\n\n  const pInfo2 = safeParse(x.Info);\n  if (pInfo2?.message_type === 'HEALTH_STATUS_SNAPSHOT') return pInfo2;\n\n  const pJson = safeParse(x.info_json);\n  if (pJson?.message_type === 'HEALTH_STATUS_SNAPSHOT') return pJson;\n\n  return null;\n}\n\nfunction getByPath(obj, path) {\n  if (!obj) return undefined;\n  let cur = obj;\n  for (const p of path.split('.')) {\n    if (cur == null) return undefined;\n    cur = cur[p];\n  }\n  return cur;\n}\n\nfunction isNum(x) { return typeof x === 'number' && Number.isFinite(x); }\nfunction eqVal(a, b) {\n  if (isNum(a) && isNum(b)) return Math.abs(a - b) < 1e-9;\n  return JSON.stringify(a) === JSON.stringify(b);\n}\n\nfunction nowIso() { return new Date().toISOString(); }\n\n// parse numeric text time_id safely (ONLY digits)\nfunction parseTimeIdInt(v) {\n  if (v == null) return null;\n  const s = String(v).trim();\n  if (!/^\\d+$/.test(s)) return null;\n  const n = parseInt(s, 10);\n  return Number.isFinite(n) ? n : null;\n}\n\n// -----------------------------\n// WARNING RULESET (MVP thresholds)\n// -----------------------------\nconst TH = {\n  // Power\n  SOC_MINOR: 35,       // <35% => MINOR\n  SOC_MAJOR: 20,       // <20% => MAJOR\n  PMIN_MINOR_W: 10,    // <10W => MINOR\n  PMIN_MAJOR_W: 5,     // <5W  => MAJOR\n  VBUS_MINOR: 27.5,    // <27.5V => MINOR\n  VBUS_MAJOR: 26.5,    // <26.5V => MAJOR\n\n  // ADCS\n  PE_MINOR_DEG: 0.3,   // >0.3° => MINOR\n  PE_MAJOR_DEG: 1.0,   // >1.0° => MAJOR\n  RW_MINOR_RPM: 5500,  // >5500 => MINOR (порог примерный)\n  RW_MAJOR_RPM: 6500,  // >6500 => MAJOR (порог примерный)\n\n  // OBC\n  CPU_MINOR: 85,       // >85% => MINOR\n  CPU_MAJOR: 95,       // >95% => MAJOR\n  MEM_MINOR_MB: 200,   // <200MB => MINOR\n  MEM_MAJOR_MB: 100,   // <100MB => MAJOR\n\n  // Comms / quality\n  LOSS_MINOR_PCT: 1.0, // >1% => MINOR\n  LOSS_MAJOR_PCT: 5.0, // >5% => MAJOR\n  GAPS_MINOR: 1,       // >=1 gap => MINOR\n  STALE_MINOR_S: 30,   // >30s => MINOR\n  STALE_MAJOR_S: 120,  // >120s => MAJOR\n\n  // Prop (пороги примерные для MVP, зависят от платформы)\n  TANKP_MINOR_KPA: 1050, // <1050 => MINOR\n  TANKP_MAJOR_KPA: 900,  // <900  => MAJOR\n\n  // Trend (если есть old + dt)\n  SOC_DROP_MINOR_PER_H: 5,   // падение SOC >5%/h => MINOR\n  SOC_DROP_MAJOR_PER_H: 10,  // >10%/h => MAJOR\n  TANKP_DROP_MINOR_PER_H: 20, // падение давления >20 kPa/h => MINOR\n  TANKP_DROP_MAJOR_PER_H: 50  // >50 kPa/h => MAJOR\n};\n\nfunction toNum(v) {\n  if (v == null) return null;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : null;\n}\n\nfunction parseUtc(ts) {\n  if (!ts) return null;\n  const d = new Date(ts);\n  return Number.isFinite(d.getTime()) ? d : null;\n}\n\nfunction buildWarnings(newSnap, oldSnap) {\n  const warnings = []; // [{level, code, detail}]\n  let levelScore = 0;  // 0 none, 1 minor, 2 major\n\n  function push(level, code, detail) {\n    warnings.push({ level, code, detail });\n    if (level === 'MAJOR') levelScore = 2;\n    else if (levelScore < 1) levelScore = 1;\n  }\n\n  if (!newSnap) {\n    return { warning_level: 'NONE', warning: 'no', warnings: [] };\n  }\n\n  // --- A) Discrete / must-have signals ---\n  // safe_mode\n  if (newSnap?.mode_state?.safe_mode === true) {\n    push('MAJOR', 'SAFE_MODE', 'mode_state.safe_mode=true');\n  }\n\n  // forbid burn\n  if (newSnap?.derived_flags?.forbid_burn === true) {\n    push('MAJOR', 'FORBID_BURN', 'derived_flags.forbid_burn=true');\n  }\n\n  // limit violations\n  const vioCount = toNum(newSnap?.check_results?.limits?.active_violations_count);\n  const vioSev = newSnap?.check_results?.limits?.highest_severity;\n  if ((vioCount != null && vioCount > 0) || (vioSev && vioSev !== 'NONE')) {\n    push('MAJOR', 'LIMIT_VIOLATION', `active_violations_count=${vioCount ?? 'n/a'}, highest_severity=${vioSev ?? 'n/a'}`);\n  }\n\n  // data validity\n  const validity = newSnap?.data_quality?.validity;\n  if (validity && validity !== 'GOOD') {\n    push('MAJOR', 'DATA_VALIDITY', `data_quality.validity=${validity}`);\n  }\n\n  // subsystem health != NOMINAL\n  const sh = newSnap?.subsystem_health || {};\n  const badSubs = Object.entries(sh).filter(([_, v]) => v && v !== 'NOMINAL');\n  if (badSubs.length) {\n    push('MAJOR', 'SUBSYSTEM_STATE', badSubs.map(([k, v]) => `${k}=${v}`).join(', '));\n  }\n\n  // comms link state\n  const linkState = newSnap?.key_metrics?.comms?.link_state;\n  if (linkState && linkState !== 'OK') {\n    push('MAJOR', 'COMMS_LINK', `link_state=${linkState}`);\n  }\n\n  // thruster ready (prop)\n  const thrReady = newSnap?.key_metrics?.prop?.thruster_ready;\n  if (thrReady === false) {\n    push('MAJOR', 'THRUSTER_NOT_READY', 'key_metrics.prop.thruster_ready=false');\n  }\n\n  // --- B) Data quality numeric thresholds ---\n  const staleness = toNum(newSnap?.data_quality?.staleness_s);\n  if (staleness != null) {\n    if (staleness > TH.STALE_MAJOR_S) push('MAJOR', 'TELEMETRY_STALE', `staleness_s=${staleness} (> ${TH.STALE_MAJOR_S})`);\n    else if (staleness > TH.STALE_MINOR_S) push('MINOR', 'TELEMETRY_STALE', `staleness_s=${staleness} (> ${TH.STALE_MINOR_S})`);\n  }\n\n  const gaps = toNum(newSnap?.data_quality?.telemetry_gaps_last_10m);\n  if (gaps != null && gaps >= TH.GAPS_MINOR) {\n    push('MINOR', 'TELEMETRY_GAPS', `telemetry_gaps_last_10m=${gaps}`);\n  }\n\n  const loss = toNum(newSnap?.data_quality?.packet_loss_estimate_pct_last_10m);\n  if (loss != null) {\n    if (loss > TH.LOSS_MAJOR_PCT) push('MAJOR', 'PACKET_LOSS', `packet_loss_pct_last_10m=${loss} (> ${TH.LOSS_MAJOR_PCT})`);\n    else if (loss > TH.LOSS_MINOR_PCT) push('MINOR', 'PACKET_LOSS', `packet_loss_pct_last_10m=${loss} (> ${TH.LOSS_MINOR_PCT})`);\n  }\n\n  // --- C) Power numeric thresholds ---\n  const soc = toNum(newSnap?.key_metrics?.power?.battery_soc_pct);\n  if (soc != null) {\n    if (soc < TH.SOC_MAJOR) push('MAJOR', 'SOC_LOW', `battery_soc_pct=${soc} (< ${TH.SOC_MAJOR})`);\n    else if (soc < TH.SOC_MINOR) push('MINOR', 'SOC_LOW', `battery_soc_pct=${soc} (< ${TH.SOC_MINOR})`);\n  }\n\n  const pm = toNum(newSnap?.key_metrics?.power?.power_margin_w);\n  if (pm != null) {\n    if (pm < TH.PMIN_MAJOR_W) push('MAJOR', 'POWER_MARGIN_LOW', `power_margin_w=${pm} (< ${TH.PMIN_MAJOR_W})`);\n    else if (pm < TH.PMIN_MINOR_W) push('MINOR', 'POWER_MARGIN_LOW', `power_margin_w=${pm} (< ${TH.PMIN_MINOR_W})`);\n  }\n\n  const vbus = toNum(newSnap?.key_metrics?.power?.bus_voltage_v);\n  if (vbus != null) {\n    if (vbus < TH.VBUS_MAJOR) push('MAJOR', 'VBUS_LOW', `bus_voltage_v=${vbus} (< ${TH.VBUS_MAJOR})`);\n    else if (vbus < TH.VBUS_MINOR) push('MINOR', 'VBUS_LOW', `bus_voltage_v=${vbus} (< ${TH.VBUS_MINOR})`);\n  }\n\n  // derived buckets (если уже считают)\n  const pBucket = newSnap?.derived_flags?.power_margin_bucket;\n  if (pBucket && pBucket !== 'OK') {\n    const lvl = (pBucket === 'CRITICAL' || pBucket === 'LOW') ? 'MAJOR' : 'MINOR';\n    push(lvl, 'POWER_BUCKET', `power_margin_bucket=${pBucket}`);\n  }\n\n  const propBucket = newSnap?.derived_flags?.prop_margin_bucket;\n  if (propBucket && propBucket !== 'OK') {\n    const lvl = (propBucket === 'CRITICAL' || propBucket === 'LOW') ? 'MAJOR' : 'MINOR';\n    push(lvl, 'PROP_BUCKET', `prop_margin_bucket=${propBucket}`);\n  }\n\n  // --- D) ADCS numeric thresholds ---\n  const pe = toNum(newSnap?.key_metrics?.adcs?.pointing_error_deg);\n  if (pe != null) {\n    if (pe > TH.PE_MAJOR_DEG) push('MAJOR', 'POINTING_ERROR', `pointing_error_deg=${pe} (> ${TH.PE_MAJOR_DEG})`);\n    else if (pe > TH.PE_MINOR_DEG) push('MINOR', 'POINTING_ERROR', `pointing_error_deg=${pe} (> ${TH.PE_MINOR_DEG})`);\n  }\n\n  const rw = toNum(newSnap?.key_metrics?.adcs?.reaction_wheel_rpm_max);\n  if (rw != null) {\n    if (rw > TH.RW_MAJOR_RPM) push('MAJOR', 'RW_SPEED_HIGH', `reaction_wheel_rpm_max=${rw} (> ${TH.RW_MAJOR_RPM})`);\n    else if (rw > TH.RW_MINOR_RPM) push('MINOR', 'RW_SPEED_HIGH', `reaction_wheel_rpm_max=${rw} (> ${TH.RW_MINOR_RPM})`);\n  }\n\n  // --- E) OBC numeric thresholds ---\n  const cpu = toNum(newSnap?.key_metrics?.obc?.cpu_load_pct);\n  if (cpu != null) {\n    if (cpu > TH.CPU_MAJOR) push('MAJOR', 'CPU_HIGH', `cpu_load_pct=${cpu} (> ${TH.CPU_MAJOR})`);\n    else if (cpu > TH.CPU_MINOR) push('MINOR', 'CPU_HIGH', `cpu_load_pct=${cpu} (> ${TH.CPU_MINOR})`);\n  }\n\n  const mem = toNum(newSnap?.key_metrics?.obc?.free_memory_mb);\n  if (mem != null) {\n    if (mem < TH.MEM_MAJOR_MB) push('MAJOR', 'MEM_LOW', `free_memory_mb=${mem} (< ${TH.MEM_MAJOR_MB})`);\n    else if (mem < TH.MEM_MINOR_MB) push('MINOR', 'MEM_LOW', `free_memory_mb=${mem} (< ${TH.MEM_MINOR_MB})`);\n  }\n\n  // --- F) Prop numeric thresholds ---\n  const tankp = toNum(newSnap?.key_metrics?.prop?.tank_pressure_kpa);\n  if (tankp != null) {\n    if (tankp < TH.TANKP_MAJOR_KPA) push('MAJOR', 'TANK_PRESS_LOW', `tank_pressure_kpa=${tankp} (< ${TH.TANKP_MAJOR_KPA})`);\n    else if (tankp < TH.TANKP_MINOR_KPA) push('MINOR', 'TANK_PRESS_LOW', `tank_pressure_kpa=${tankp} (< ${TH.TANKP_MINOR_KPA})`);\n  }\n\n  // --- G) Trend warnings (если есть old + dt) ---\n  if (oldSnap) {\n    const tNew = parseUtc(newSnap?.check_time_utc) || parseUtc(newSnap?.message_creation_time_utc);\n    const tOld = parseUtc(oldSnap?.check_time_utc) || parseUtc(oldSnap?.message_creation_time_utc);\n    if (tNew && tOld) {\n      const dtH = (tNew.getTime() - tOld.getTime()) / 3600000;\n      if (dtH > 0.05) {\n        const socOld = toNum(oldSnap?.key_metrics?.power?.battery_soc_pct);\n        if (soc != null && socOld != null) {\n          const dropPerH = (socOld - soc) / dtH; // положительное = падение\n          if (dropPerH > TH.SOC_DROP_MAJOR_PER_H) push('MAJOR', 'SOC_DROP_FAST', `soc_drop_per_h=${dropPerH.toFixed(2)} (> ${TH.SOC_DROP_MAJOR_PER_H})`);\n          else if (dropPerH > TH.SOC_DROP_MINOR_PER_H) push('MINOR', 'SOC_DROP_FAST', `soc_drop_per_h=${dropPerH.toFixed(2)} (> ${TH.SOC_DROP_MINOR_PER_H})`);\n        }\n\n        const tankOld = toNum(oldSnap?.key_metrics?.prop?.tank_pressure_kpa);\n        if (tankp != null && tankOld != null) {\n          const dropPerH = (tankOld - tankp) / dtH; // положительное = падение\n          if (dropPerH > TH.TANKP_DROP_MAJOR_PER_H) push('MAJOR', 'TANKP_DROP_FAST', `tankp_drop_kpa_per_h=${dropPerH.toFixed(2)} (> ${TH.TANKP_DROP_MAJOR_PER_H})`);\n          else if (dropPerH > TH.TANKP_DROP_MINOR_PER_H) push('MINOR', 'TANKP_DROP_FAST', `tankp_drop_kpa_per_h=${dropPerH.toFixed(2)} (> ${TH.TANKP_DROP_MINOR_PER_H})`);\n        }\n      }\n    }\n  }\n\n  const warning_level = (levelScore === 2) ? 'MAJOR' : (levelScore === 1 ? 'MINOR' : 'NONE');\n\n  if (!warnings.length) {\n    return { warning_level: 'NONE', warning: 'no', warnings: [] };\n  }\n\n  // компактная строка, чтобы писать в БД\n  const major = warnings.filter(w => w.level === 'MAJOR').map(w => `${w.code}(${w.detail})`);\n  const minor = warnings.filter(w => w.level === 'MINOR').map(w => `${w.code}(${w.detail})`);\n\n  const parts = [];\n  if (major.length) parts.push(`MAJOR: ${major.join('; ')}`);\n  if (minor.length) parts.push(`MINOR: ${minor.join('; ')}`);\n\n  // ✅ ЕДИНСТВЕННЫЙ ФИКС: убрать запятые из warning, чтобы n8n не резал параметры\n  const warningStr = parts.join(' | ').replace(/,/g, ';');\n\n  return {\n    warning_level,\n    warning: warningStr,\n    warnings\n  };\n}\n\n// 1) Определяем new/old\nconst sqlRow = items.find(x => x.prev_info !== undefined || x.info_new !== undefined || x.decision !== undefined) || null;\n\nconst newSnap =\n  (sqlRow?.info_new ? pickSnapshot({ message_type: null, info_new: sqlRow.info_new }) : null) ||\n  items.map(pickSnapshot).find(Boolean) ||\n  null;\n\nconst oldSnap =\n  (sqlRow?.prev_info ? pickSnapshot({ message_type: null, prev_info: sqlRow.prev_info }) : null) ||\n  null;\n\n// fallback: если просто 2 snapshot'а\nconst snaps = items.map(pickSnapshot).filter(Boolean);\nconst finalNew = newSnap || snaps[0] || null;\nconst finalOld = oldSnap || snaps[1] || null;\n\nconst satellite =\n  finalNew?.spacecraft_name ||\n  sqlRow?.satellite ||\n  finalNew?.spacecraft_id ||\n  \"UNKNOWN\";\n\nconst update_time_utc =\n  finalNew?.message_creation_time_utc ||\n  sqlRow?.analysis_ts ||\n  finalNew?.check_time_utc ||\n  nowIso();\n\n// 2) MVP: какие поля сравниваем (можешь расширять)\nconst DIFF_PATHS = [\n  \"data_quality.validity\",\n  \"data_quality.staleness_s\",\n\n  \"mode_state.major_mode\",\n  \"mode_state.submode\",\n  \"mode_state.safe_mode\",\n  \"mode_state.fdir_state\",\n\n  \"subsystem_health.power\",\n  \"subsystem_health.thermal\",\n  \"subsystem_health.adcs\",\n  \"subsystem_health.comms\",\n  \"subsystem_health.prop\",\n  \"subsystem_health.obc\",\n\n  \"derived_flags.comm_available\",\n  \"derived_flags.thruster_ready\",\n  \"derived_flags.forbid_burn\",\n  \"derived_flags.power_margin_bucket\",\n  \"derived_flags.prop_margin_bucket\",\n\n  \"key_metrics.power.bus_voltage_v\",\n  \"key_metrics.power.bus_current_a\",\n  \"key_metrics.power.battery_soc_pct\",\n  \"key_metrics.power.power_margin_w\",\n\n  \"key_metrics.thermal.temp_c.battery\",\n  \"key_metrics.thermal.temp_c.obc\",\n  \"key_metrics.thermal.temp_c.prop_line\",\n\n  \"key_metrics.adcs.pointing_error_deg\",\n  \"key_metrics.adcs.reaction_wheel_rpm_max\",\n\n  \"key_metrics.comms.link_state\",\n  \"key_metrics.comms.next_contact_utc\",\n  \"key_metrics.comms.ground_station\",\n\n  \"key_metrics.prop.thruster_ready\",\n  \"key_metrics.prop.tank_pressure_kpa\",\n  \"key_metrics.prop.valve_status\",\n\n  \"key_metrics.obc.cpu_load_pct\",\n  \"key_metrics.obc.free_memory_mb\"\n];\n\n// 3) Собираем изменения\nlet changes = [];\n\nif (finalOld && finalNew) {\n  for (const path of DIFF_PATHS) {\n    const oldV = getByPath(finalOld, path);\n    const newV = getByPath(finalNew, path);\n\n    if (oldV === undefined && newV === undefined) continue;\n\n    if (!eqVal(oldV, newV)) {\n      changes.push({ path, old: oldV, new: newV });\n    }\n  }\n}\n\n// 4) Patch для update_info (одна запись)\nconst update_info_patch = changes.length\n  ? [{ update_time_utc, changes }]\n  : [];\n\n// 4.5) WARNING (MVP): по порогам/статусам\nconst { warning, warning_level, warnings } = buildWarnings(finalNew, finalOld);\n\n// 5) decision + NUMERIC time_id_to_use (1,2,3,...)\nlet decision = sqlRow?.decision ?? (finalOld ? \"WITHIN_3H\" : \"NO_PREV\");\n\n// Берём ТОЛЬКО числовые значения из SQL\nconst latest_time_id_int  = parseTimeIdInt(sqlRow?.latest_time_id);\nconst matched_time_id_int = parseTimeIdInt(sqlRow?.matched_time_id);\n\n// Если SQL дал time_id_to_use, принимаем только если он числовой\nlet time_id_to_use_int = parseTimeIdInt(sqlRow?.time_id_to_use);\nlet need_new_time_id = (sqlRow?.need_new_time_id != null) ? Boolean(sqlRow.need_new_time_id) : null;\n\nif (time_id_to_use_int == null) {\n  if (decision === \"WITHIN_3H\" && matched_time_id_int != null) {\n    time_id_to_use_int = matched_time_id_int;         // оставить тот же\n    need_new_time_id = false;\n  } else if (decision === \"OVER_3H\" || decision === \"NO_SATELLITE\" || decision === \"NO_PREV\") {\n    time_id_to_use_int = (latest_time_id_int ?? 0) + 1;  // если кейсов не было -> 1\n    need_new_time_id = true;\n  } else {\n    time_id_to_use_int = (latest_time_id_int ?? 0) + 1;\n    need_new_time_id = true;\n  }\n} else {\n  if (need_new_time_id == null) need_new_time_id = (decision !== \"WITHIN_3H\");\n}\n\nconst time_id_to_use = String(time_id_to_use_int);\n\nreturn [{\n  json: {\n    satellite,\n    decision,\n    time_id_to_use,\n    need_new_time_id,\n\n    warning,        // <-- строка для $5 (в БД) (теперь без запятых)\n    warning_level,  // <-- NONE/MINOR/MAJOR\n    warnings,       // <-- массив объектов (как был)\n\n    // для апдейта/инсерта\n    info_new: finalNew,            // целый новый snapshot (jsonb)\n    prev_info: finalOld || null,   // старый snapshot (если был)\n    changes,                       // список отличий\n    update_info_patch,             // append в update_info\n\n    changes_count: changes.length,\n    update_time_utc,\n\n    // дебаг\n    debug_latest_time_id: sqlRow?.latest_time_id ?? null,\n    debug_matched_time_id: sqlRow?.matched_time_id ?? null,\n    debug_time_id_from_sql: sqlRow?.time_id_to_use ?? null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        400
+      ],
+      "id": "1b4ae0a2-a5b2-4c6e-81a6-74e44863da4a",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH inp AS (\n  SELECT\n    $1::text        AS satellite,\n    $2::timestamptz AS analysis_ts,\n    $3::jsonb       AS info_new\n),\n\n-- последняя запись/окно по спутнику (последний time_id)\nlatest AS (\n  SELECT hw.*\n  FROM inp i\n  LEFT JOIN LATERAL (\n    SELECT *\n    FROM health_status hw\n    WHERE hw.satellite = i.satellite\n    ORDER BY hw.creation_date DESC\n    LIMIT 1\n  ) hw ON true\n),\n\n-- окно, в которое попадает анализ (analysis_ts в пределах 3 часов от creation_date)\nmatched AS (\n  SELECT hw.*\n  FROM inp i\n  JOIN LATERAL (\n    SELECT *\n    FROM health_status hw\n    WHERE hw.satellite = i.satellite\n      AND i.analysis_ts >= hw.creation_date\n      AND i.analysis_ts <  hw.creation_date + interval '3 hours'\n    ORDER BY hw.creation_date DESC\n    LIMIT 1\n  ) hw ON true\n)\n\nSELECT\n  i.satellite,\n  i.analysis_ts,\n  i.info_new,\n\n  -- последний time_id по спутнику (для справки)\n  l.time_id       AS latest_time_id,\n  l.creation_date AS latest_creation_date,\n\n  -- time_id окна, в которое попали (если попали)\n  m.time_id       AS matched_time_id,\n  m.creation_date AS matched_creation_date,\n\n  -- прошлый info нужен только если WITHIN_3H\n  m.info          AS prev_info,\n\n  CASE\n    WHEN m.time_id IS NOT NULL THEN 'WITHIN_3H'\n    WHEN l.time_id IS NULL THEN 'NO_SATELLITE'\n    ELSE 'OVER_3H'\n  END AS decision,\n\n  -- КЛЮЧЕВОЕ: какой time_id использовать дальше\n  CASE\n    WHEN m.time_id IS NOT NULL THEN m.time_id\n    ELSE (\n      i.satellite || '-' ||\n      to_char((i.analysis_ts AT TIME ZONE 'UTC'), 'YYYYMMDD\"T\"HH24MISS\"Z\"')\n    )\n  END AS time_id_to_use,\n\n  CASE\n    WHEN m.time_id IS NOT NULL THEN\n      'WITHIN_3H: используй prev_info и обновляй тот же time_id.'\n    WHEN l.time_id IS NULL THEN\n      'NO_SATELLITE: спутника нет в БД — создай новый time_id.'\n    ELSE\n      'OVER_3H: прошло >= 3 часов от creation_date последнего time_id — создай новый time_id.'\n  END AS note,\n\n  CASE\n    WHEN l.time_id IS NULL THEN NULL\n    ELSE ROUND(EXTRACT(EPOCH FROM (i.analysis_ts - l.creation_date)) / 3600.0, 3)\n  END AS hours_since_latest_window_start,\n\n  -- флаг для workflow\n  (m.time_id IS NULL) AS need_new_time_id\n\nFROM inp i\nLEFT JOIN latest  l ON true\nLEFT JOIN matched m ON true;",
+        "options": {
+          "queryReplacement": "=$1 = {{ $json.sql_params[\"$1\"] }}\n$2 = {{ $json.sql_params[\"$2\"] }}\n$3 = {{ $json.sql_params[\"$3\"] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -224,
+        400
+      ],
+      "id": "0ad17bf4-5a52-4ed4-affb-70207db10a3c",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "h2S4iiYTaQE9EyxV",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select *\nFROM health_status\nWHERE satellite = $1\nORDER BY time_id DESC\nlimit 1;",
+        "options": {
+          "queryReplacement": "=$1 = {{ $json.sattelite_name }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -176,
+        224
+      ],
+      "id": "f25cce36-6c36-4022-af61-f864d75275ae",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "h2S4iiYTaQE9EyxV",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "formTitle": "HEALTH_STATUS",
+        "formDescription": "send info",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "info",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        -624,
+        384
+      ],
+      "id": "8348bd13-504c-4292-b8e0-2096b84fa3b7",
+      "name": "On form submission",
+      "webhookId": "00278854-15c6-40f5-a08e-1d7d09d38647"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  item.json.myNewField = 1;\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7e3ae7d9-d95e-48cd-bdde-e13d7ae0019a",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "sattelite_name"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -416,
+        224
+      ],
+      "id": "8c4534de-8dea-4ad0-b91e-cb3c85b02b20",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execute a SQL query4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Execute a SQL query4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "aeb82866-9898-4b5e-aefd-ec66d54d323e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b4ea4ca9c3070f4ac2566f1d5b9e37f48c892a17b88ab52397ad078af0d98bdb"
+  },
+  "id": "HH6ek2AryuM3jy9X",
+  "tags": []
+}

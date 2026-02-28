@@ -1,0 +1,26 @@
+Message ID: 12502
+Created at: 2025-04-26 00:18 UTC
+
+Subject: Re: Coordination plan proposal — SATELLITE MOON vs MIA-X01, CDM 9850145153
+
+Hello MIA Operations,
+
+Thanks for the quick acknowledgment.
+
+Coordination proposal for CDM 9850145153:
+
+We are not requesting that you maneuver at this stage.
+
+We request you freeze non-essential maneuvers affecting trajectory through TCA, unless mission safety requires otherwise.
+
+We will run additional screening and target a decision checkpoint on 2025-04-27 18:00 UTC, with a final update by 2025-04-28 18:00 UTC.
+
+We do expect possible CDM updates before TCA. If you receive any newer CDM than 9850145153, please forward the CDM ID and creation_date, plus headline changes.
+
+Please also confirm whether you have any mandatory station-keeping windows between now and TCA.
+
+Regards,
+Operator A - LUNASAT
+JOHN.DOE@SOMEWHERE.NET
+ | +46326345130312
+ 

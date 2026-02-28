@@ -1,0 +1,110 @@
+{
+  "message_id": "HSS-20260223-171315Z-SC001",
+  "mode_state": {
+    "submode": "SUN_POINTING",
+    "safe_mode": false,
+    "fdir_state": "ACTIVE",
+    "major_mode": "NOMINAL"
+  },
+  "key_metrics": {
+    "obc": {
+      "cpu_load_pct": 46,
+      "free_memory_mb": 512
+    },
+    "adcs": {
+      "attitude_mode": "SUN_POINTING",
+      "pointing_error_deg": 0.33,
+      "reaction_wheel_rpm_max": 4180
+    },
+    "prop": {
+      "valve_status": "NOMINAL",
+      "thruster_ready": true,
+      "tank_pressure_kpa": 1187
+    },
+    "comms": {
+      "link_state": "OK",
+      "ground_station": "GS-AKTAU-01",
+      "next_contact_utc": "2026-02-23T17:40:00Z"
+    },
+    "power": {
+      "bus_current_a": 1.35,
+      "bus_voltage_v": 27.9,
+      "power_margin_w": 9.2,
+      "battery_soc_pct": 33
+    },
+    "thermal": {
+      "temp_c": {
+        "obc": 34,
+        "battery": 13.5,
+        "prop_line": 5.4
+      },
+      "heaters": {
+        "battery": "AUTO",
+        "prop_line": "AUTO"
+      }
+    }
+  },
+  "data_quality": {
+    "validity": "GOOD",
+    "staleness_s": 12,
+    "telemetry_gaps_last_10m": 0,
+    "packet_loss_estimate_pct_last_10m": 0.4
+  },
+  "message_type": "HEALTH_STATUS_SNAPSHOT",
+  "check_results": {
+    "limits": {
+      "highest_severity": "NONE",
+      "active_violations_count": 0
+    },
+    "expected_status": {
+      "mismatches_count": 0
+    },
+    "status_consistency": {
+      "inconsistencies_count": 0
+    }
+  },
+  "derived_flags": {
+    "forbid_burn": false,
+    "comm_available": true,
+    "thruster_ready": true,
+    "prop_margin_bucket": "OK",
+    "power_margin_bucket": "OK"
+  },
+  "spacecraft_id": "SC-001",
+  "check_time_utc": "2026-02-23T17:10:00Z",
+  "source_pipeline": {
+    "nasa_cfs_style_apps": {
+      "health_safety_hs": true,
+      "limit_checker_lc": true
+    },
+    "esa_scos2000_style_checks": {
+      "limits": true,
+      "expected_status": true,
+      "parameter_validity": true,
+      "status_consistency": true
+    }
+  },
+  "spacecraft_name": "MIA-X01",
+  "ops_coordination": {
+    "stc_context": "Kayhan-style STC context (optional)",
+    "coordination_state": "NONE",
+    "related_conjunction_window_id": null
+  },
+  "subsystem_health": {
+    "obc": "NOMINAL",
+    "adcs": "NOMINAL",
+    "prop": "NOMINAL",
+    "comms": "NOMINAL",
+    "power": "NOMINAL",
+    "thermal": "NOMINAL"
+  },
+  "summary_for_handoff": {
+    "notes": [
+      "Telemetry quality GOOD; no recent gaps; packet loss low.",
+      "Mode NOMINAL / SUN_POINTING; FDIR ACTIVE; no safety inhibits.",
+      "WARN-level thresholds tripped: SOC below 35%, power margin below 10 W, pointing error above 0.3 deg."
+    ],
+    "overall": "All subsystems nominal; no active limit violations."
+  },
+  "message_creation_time_utc": "2026-02-23T17:13:15Z"
+}

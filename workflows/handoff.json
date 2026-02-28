@@ -1,0 +1,422 @@
+{
+  "name": "handoff",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -208,
+        384
+      ],
+      "id": "284c6afc-7cac-49af-86ba-8168597ad9f3",
+      "name": "When chat message received",
+      "webhookId": "a625b00b-e459-4754-b992-b9130ae14032",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "Ты — агент операционного суммирования в рабочем процессе координации спутников.\n\nТвоя задача — сформировать краткий фактический handoff-пересказ, описывающий:\n\n* что сообщалось в операторских письмах/сообщениях\n* какие действия или события произошли\n* какую информацию должен знать следующий оператор\n\nТы ОБЯЗАН строго соблюдать следующие правила:\n\nИСТОЧНИКИ ДАННЫХ (ОБЯЗАТЕЛЬНЫ)\n\n1. Получить и применить ВСЕ применимые правила из:\n   → Postgress pgVector store 1 (база правил)\n   Эти правила имеют высший приоритет и должны переопределять любые эвристические рассуждения.\n\n2. Получить контекстную структуру из:\n   → Postgress pgVector store (база CASECARD)\n   Использовать её для терминологии, интерпретации и формата отчёта.\n\n3. Получать данные писем/сообщений ТОЛЬКО через:\n   → tool call: \"handoff_data\"\n\n4. Получать данные CDM/валидации ТОЛЬКО через:\n   → tool call: \"validator_base\"(для получения данных, ты должен вписать в objects имена обьектов, которые ты уже прочитаешь в письмах, к примеру SATTELITE MOON, MIA-X01)\n\nЗапрещено делать пересказ или выводы без обращения к этим источникам.\n\nОГРАНИЧЕНИЯ ПОВЕДЕНИЯ\n\n* Запрещено придумывать или достраивать недостающие факты\n* Если данных нет — писать: \"No data returned\"\n* использовать очень малую  память предыдущего диалога\n* Не спекулировать\n* Не выводить цепочку рассуждений\n* Приоритет соблюдения правил выше краткости\n\nПОРЯДОК ОБРАБОТКИ (СТРОГО)\n\n1. Запросить правила (pgVector store 1)\n2. Запросить контекст CASECARD\n3. Вызвать handoff_data для получения сообщений\n4. Вызвать validator_base для статуса CDM\n5. Применить правила ко всем полученным данным\n6. Сформировать структурированный пересказ\n\nФОРМАТ ВЫВОДА (ОБЯЗАТЕЛЬНЫЙ)\n\nSummary:\n\n* Thread scope covered:\n* Operator transitions (if any):\n* Messages exchanged (кратко по хронологии):\n* CDMs referenced/updated:\n* New CDMs detected:\n* Operational status (ours vs counterpart):\n* Planned actions:\n* Pending expectations / monitoring items:\n\nСТИЛЬ\n\n* Сжатый\n* Технический\n* Без лишнего текста\n* Без комментариев\n* Без эмодзи\n* Без дополнительных заголовков\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        112,
+        416
+      ],
+      "id": "eda18062-1971-4955-acdc-581840a4accb",
+      "name": "AI Agent",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 5000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -32,
+        640
+      ],
+      "id": "aad5cbed-090d-4f7e-bd82-7ad4aece862e",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "QTloMWRWf4XFWwJ1",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 2
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        192,
+        640
+      ],
+      "id": "aa7de1b0-0695-4730-9476-241d93a3fc36",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "there is casecard",
+        "tableName": "casecards",
+        "topK": 3,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        640,
+        512
+      ],
+      "id": "0e36f4b1-c8ce-4fa5-82b6-d98cf25baa9f",
+      "name": "Postgres PGVector Store",
+      "credentials": {
+        "postgres": {
+          "id": "QYLEYG73zSKxPF8q",
+          "name": "Postgres account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "there is rules",
+        "tableName": "rules",
+        "topK": 7,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        704,
+        592
+      ],
+      "id": "8f780aa3-1615-462d-a92e-049d73f2d60d",
+      "name": "Postgres PGVector Store1",
+      "credentials": {
+        "postgres": {
+          "id": "QYLEYG73zSKxPF8q",
+          "name": "Postgres account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        528,
+        640
+      ],
+      "id": "3cdb0e60-1ed8-402b-bd91-6b5dec09d8d3",
+      "name": "Embeddings OpenAI",
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "QTloMWRWf4XFWwJ1",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO messages\n(message_id, created_at, operator, id)\nvalues ($1, $2, $3, $4)",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "=$1 = {{ $json.message_id }} $2 = {{ $json.created_at}} $3 = {{ $json.operator }} $4 = {{ $json.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        224,
+        0
+      ],
+      "id": "678fe1e8-cd25-4469-9cc7-e295998826a7",
+      "name": "Execute a SQL query",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "2fetuh0Apnozq8Vi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * n8n Function node (JavaScript)\n * INPUT: item.json.chatInput (текст письма)\n * OUTPUT: { message_id, created_at, letter, operator }\n * letter будет с НОРМАЛЬНЫМИ переносами строк (не одной строкой).\n */\nid = 2\nfunction pickFirstMatch(text, regex) {\n  const m = String(text || \"\").match(regex);\n  return m ? (m[1] ?? null) : null;\n}\n\nfunction extractAllEmails(text) {\n  const matches = String(text || \"\")\n    .match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/g);\n  if (!matches) return [];\n  const seen = new Set();\n  const out = [];\n  for (const e of matches) {\n    const k = e.toLowerCase();\n    if (!seen.has(k)) { seen.add(k); out.push(k); }\n  }\n  return out;\n}\n\nfunction parseUtcLikeDate(s) {\n  if (!s) return null;\n  const str = String(s).trim();\n\n  // ISO (…Z)\n  {\n    const d = new Date(str);\n    if (!isNaN(d.getTime()) && (str.includes(\"Z\") || str.includes(\"UTC\") || str.includes(\"utc\"))) {\n      return d.toISOString();\n    }\n  }\n\n  // \"YYYY-MM-DD HH:MM UTC\" or \"YYYY-MM-DD HH:MM:SS UTC\" or with Z\n  const m = str.match(\n    /(\\d{4})-(\\d{2})-(\\d{2})[ T](\\d{2}):(\\d{2})(?::(\\d{2}))?\\s*(?:\\(?UTC\\)?|Z)?/i\n  );\n  if (m) {\n    const Y = Number(m[1]), Mo = Number(m[2]), D = Number(m[3]);\n    const h = Number(m[4]), mi = Number(m[5]), se = m[6] ? Number(m[6]) : 0;\n    const d = new Date(Date.UTC(Y, Mo - 1, D, h, mi, se));\n    return isNaN(d.getTime()) ? null : d.toISOString();\n  }\n\n  // last resort\n  const d = new Date(str);\n  return isNaN(d.getTime()) ? null : d.toISOString();\n}\n\nfunction extractMessageId(letter) {\n  return (\n    pickFirstMatch(letter, /(?:^|\\n)\\s*Message\\s*ID\\s*:\\s*([^\\s\\r\\n]+)/i) ||\n    pickFirstMatch(letter, /(?:^|\\n)\\s*CDM\\s*MESSAGE[_\\s-]*ID\\s*:\\s*([^\\s\\r\\n]+)/i) ||\n    null\n  );\n}\n\nfunction extractCreatedAt(letter) {\n  const createdRaw =\n    pickFirstMatch(letter, /(?:^|\\n)\\s*Created\\s*at\\s*:\\s*([^\\r\\n]+)/i) ||\n    pickFirstMatch(letter, /(?:^|\\n)\\s*CDM\\s*creation[_\\s-]*date.*?:\\s*([^\\r\\n]+)/i) ||\n    null;\n\n  return createdRaw ? parseUtcLikeDate(createdRaw) : null;\n}\n\nfunction extractOperator(letter) {\n  // 1) Signature: \"Operator A — LUNASAT\"\n  const m = String(letter || \"\").match(/(?:^|\\n).*?\\bOperator\\s*([A-Z])\\b\\s*[—-]\\s*([A-Z0-9_.-]+)/i);\n  if (m) return `${m[1]} — ${m[2]}`;\n\n  // 2) Any line \"Operator: XYZ\"\n  const opBody = pickFirstMatch(letter, /(?:^|\\n)\\s*Operator\\s*:\\s*([A-Z0-9_.-]+)/i);\n  if (opBody) return opBody;\n\n  // 3) Fallback: last email in letter (usually signature)\n  const emails = extractAllEmails(letter);\n  if (emails.length) return emails[emails.length - 1];\n\n  return null;\n}\n\nfunction normalizeLetterText(x) {\n  // Приводим переносы строк к реальным \\n и убираем лишние \\r\n  let s = String(x ?? \"\");\n\n  // Если переносы пришли как два символа \"\\\\n\" — разэкранируем\n  const hasRealNewlines = s.includes(\"\\n\") || s.includes(\"\\r\");\n  const hasEscapedNewlines = s.includes(\"\\\\n\") || s.includes(\"\\\\r\\\\n\") || s.includes(\"\\\\r\");\n\n  if (!hasRealNewlines && hasEscapedNewlines) {\n    s = s\n      .replace(/\\\\r\\\\n/g, \"\\n\")\n      .replace(/\\\\n/g, \"\\n\")\n      .replace(/\\\\r/g, \"\\n\");\n  }\n\n  // Нормализуем реальные Windows-переносы в \\n\n  s = s.replace(/\\r\\n/g, \"\\n\").replace(/\\r/g, \"\\n\");\n\n  // (опционально) убрать пробелы в конце строк\n  s = s.split(\"\\n\").map(line => line.replace(/[ \\t]+$/g, \"\")).join(\"\\n\");\n\n  return s;\n}\n\nconst out = [];\n\nfor (const item of items) {\n  const raw = item.json?.chatInput;\n\n  if (raw == null) {\n    out.push({\n      json: {\n        message_id: null,\n        created_at: null,\n        letter: null,\n        operator: null,\n        error: \"chatInput is null/undefined\",\n      },\n    });\n    continue;\n  }\n\n  const letter = normalizeLetterText(raw);\n\n  const message_id = extractMessageId(letter);\n  const created_at = extractCreatedAt(letter);\n  const operator = extractOperator(letter);\n\n  out.push({\n    json: {\n      message_id,\n      created_at,\n      letter,     // <-- тут уже нормальный многострочный текст\n      operator,\n      id,\n    },\n  });\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "4d145588-b619-4e82-bbea-c8eb085c58f3",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "formTitle": "dsaz",
+        "formDescription": "asdasdasd",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "asdas",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        208,
+        240
+      ],
+      "id": "7e52ddb9-327b-45bf-94d2-13e85d0c7e4c",
+      "name": "On form submission",
+      "webhookId": "b24b6635-1a9f-4765-a9ee-31c21b283c21"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "tableName": "rules",
+        "embeddingBatchSize": 150,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        416,
+        272
+      ],
+      "id": "35c4b0b1-33d4-4e7d-aa15-39140629b49e",
+      "name": "Postgres PGVector Store2",
+      "credentials": {
+        "postgres": {
+          "id": "QYLEYG73zSKxPF8q",
+          "name": "Postgres account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        624,
+        400
+      ],
+      "id": "075ca8c2-5c49-4075-8b94-b862da88beff",
+      "name": "Default Data Loader"
+    },
+    {
+      "parameters": {
+        "description": "there is CDM_DATA BASE",
+        "workflowId": {
+          "__rl": true,
+          "value": "H0mGDKsuvbZ1bAzO",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/H0mGDKsuvbZ1bAzO",
+          "cachedResultName": "Handoff_data"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('id', ``, 'string') }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        336,
+        640
+      ],
+      "id": "a71e4514-d0e0-442e-b9c4-1243b8d406da",
+      "name": "Call 'handoff_base"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres PGVector Store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres PGVector Store1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Postgres PGVector Store",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Postgres PGVector Store1",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Postgres PGVector Store2",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Postgres PGVector Store2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Postgres PGVector Store2",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'handoff_base": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "15e15466-7d44-4708-9a03-77a28a2f54bb",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b4ea4ca9c3070f4ac2566f1d5b9e37f48c892a17b88ab52397ad078af0d98bdb"
+  },
+  "id": "7UJ9iCpzVgt0rgjq",
+  "tags": []
+}

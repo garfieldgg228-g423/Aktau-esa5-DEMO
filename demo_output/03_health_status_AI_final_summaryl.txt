@@ -1,0 +1,61 @@
+ИДЕНТИФИКАЦИЯ
+time_id: 3
+satellite: MIA-X01
+окно анализа: текущее состояние + изменения за последние 3 часа
+источники: rules + casecards + feas
+КОРОТКИЙ ВЕРДИКТ
+Состояние: деградирует
+Главная причина(ы) вердикта:
+Причина #1: Коммуникации MAJOR, link_state=NO_LOCK, связь отсутствует (E1, E2)
+Причина #2: Пропульсия MAJOR: thruster_ready=false, valve_status=INHIBITED, burn запрещён (E3–E5)
+Причина #3: Качество данных DEGRADED: staleness=44s, gaps=4, packet loss=3.6% (E6–E9)
+ТЕКУЩЕЕ СОСТОЯНИЕ СПУТНИКА
+Ключевые симптомы/флаги/режимы:
+Коммуникационная подсистема MAJOR, потеря связи NO_LOCK, comm_available=false (E1,E2)
+Пропульсия MAJOR с inhibited клапаном и thruster_ready=false (E3,E4)
+Качество телеметрии degraded с задержками и потерями пакетов (E6–E9)
+ADCS, Power, Thermal в NOMINAL
+Что “хорошо”:
+Система ADCS точна, error=0.08 deg, колеса реакционного управления RPM 3450 (E10)
+Power и Thermal работают в норме, батарея SOC 54%, напряжение 28V (E10)
+Что “плохо”: отсутствуют новые вторичные проблемы
+ЧТО ИЗМЕНИЛОСЬ ЗА ПОСЛЕДНИЕ 3 ЧАСА
+Изменение #1: связь изменилась с OK→NO_LOCK, уровень серьезности с NOMINAL→MAJOR — критично для командования (E11)
+Изменение #2: качество данных ухудшилось с GOOD→DEGRADED, появилось больше задержек и потерь (E13)
+Изменение #3: пропульсия изменилась: thruster_ready=true→false, клапан NOMINAL→INHIBITED, burn запрещён (E12)
+Изменение #4: ADCS/Power/Thermal улучшились с MAJOR→NOMINAL — УЛУЧШЕНИЕ (E14)
+ПРОБЛЕМЫ И НА ЧТО СМОТРЕТЬ В ПЕРВУЮ ОЧЕРЕДЬ
+P0: Восстановить связь и подтвердить достоверность телеметрии (см. Причина #1–#3)
+P1: Провести диагностику inhibit пропульсии (см. Причина #2)
+P2: Контролировать состояние ADCS и Power, несмотря на улучшение, следить за стабильностью (E14)
+ЧТО ЭТО ОЗНАЧАЕТ
+Интерпретация 1: Нарушение связи и ухудшение качества данных напрямую ограничивают командование и контроль (E1, E2, E6)
+Интерпретация 2: Пропульсия находится в состоянии inhibit с запрещением burn, что ограничивает манёвры и рисковано (E3–E5)
+ОГРАНИЧЕНИЯ, КОТОРЫЕ МОГУТ ПОЯВИТЬСЯ, И ПОЧЕМУ
+Ограничение 1: Запрет на burn из-за состояние пропульсии (см. Причина #2)
+Ограничение 2: Активные операции с отсутствием связи могут привести к ошибкам (см. Причина #1)
+ЧТО НЕ РЕКОМЕНДУЕТСЯ ДЕЛАТЬ СЕЙЧАС
+Не рекомендуется проводить манёвры без восстановленной связи и диагностики пропульсии (см. Причина #1, #2)
+ОТКУДА ОБЫЧНО БЫВАЮТ ТАКИЕ ПРОБЛЕМЫ
+Типовая причина: потеря линка связи (NO_LOCK), пропульсия inhibited — подтверждено схожими кейсами (casecard CC-HSS-20260223-222515Z-SC001) (E3–E5, E9)
+НАСКОЛЬКО ЭТО СЕРЬЁЗНО (Severity)
+Severity: 80/100 — RED, major из-за отсутствия связи и inhibit пропульсии (E1–E5)
+ЧТО НУЖНО УТОЧНИТЬ
+Не хватает данных: подробности причин inhibit пропульсии, состояние драйверов и interlock'ов
+Вопрос оператору #1: Какие меры уже приняты для восстановления связи?
+Вопрос оператору #2: Есть ли открытые инциденты или ошибки в системе пропульсии?
+EVIDENCE MAP:
+E1=feas.subsystem_health.comms=MAJOR
+E2=feas.key_metrics.comms.link_state=NO_LOCK
+E3=feas.subsystem_health.prop=MAJOR
+E4=feas.key_metrics.prop.thruster_ready=false
+E5=feas.derived_flags.forbid_burn=true
+E6=feas.data_quality.validity=DEGRADED
+E7=feas.data_quality.staleness_s=44
+E8=feas.data_quality.telemetry_gaps_last_10m=4
+E9=feas.data_quality.packet_loss_estimate_pct_last_10m=3.6
+E10=feas.key_metrics.adcs.pointing_error_deg=0.08; feas.key_metrics.power.battery_soc_pct=54
+E11=feas.update_info.comms_change=OK→NO_LOCK; NOMINAL→MAJOR
+E12=feas.update_info.prop_change=thruster_ready true→false; valve NOMINAL→INHIBITED
+E13=feas.update_info.data_quality_change=GOOD→DEGRADED
+E14=feas.update_info.recovery=adcs/power/thermal MAJOR→NOMINAL

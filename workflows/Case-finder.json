@@ -1,0 +1,1090 @@
+{
+  "name": "Case-finder",
+  "nodes": [
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "builtInTools": {
+          "codeInterpreter": true
+        },
+        "options": {
+          "timeout": 500000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        544,
+        816
+      ],
+      "id": "fa91fe03-e870-47f8-81ac-3304dc839c89",
+      "name": "OpenAI Chat Model",
+      "alwaysOutputData": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "QTloMWRWf4XFWwJ1",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        2080,
+        832
+      ],
+      "id": "0294c62b-cfe3-4309-b9ba-41278ddf300c",
+      "name": "Default Data Loader"
+    },
+    {
+      "parameters": {
+        "options": {
+          "batchSize": 100
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2224,
+        800
+      ],
+      "id": "b5ccbffd-337a-4ba5-ad16-005c4586c338",
+      "name": "Embeddings OpenAI",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "QTloMWRWf4XFWwJ1",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO difference\n(pair_key, FROM_CDM_ID, to_CDM_ID, old_values, new_values, delta, delta_ptc, \"Freshness \", \"pair_a\", pair_b, \"delta t\")\nValues ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, $11) \n",
+        "options": {
+          "queryReplacement": "=$1 = {{ $json.pair_key }}  $2 = {{ $json.analysis.FROM_CDM_ID }}\n$3 = {{ $json.analysis.TO_CDM_ID }} $4 = ={{ JSON.stringify($json.analysis.old_values) }}\n$5 = ={{ JSON.stringify($json.analysis.new_values) }}\n\n$6 = ={{ JSON.stringify($json.analysis.delta_values) }}\n\n$7 = ={{ JSON.stringify($json.analysis.percent_change) }}\n$8 = {{ $json.analysis.freshness_pair }}\n$9 = {{ $json.pair_a }}\n$10 = {{ $json.pair_b }}\n$11 = ={{ [\n  $json.analysis.old_dt_to_tca.days,\n  $json.analysis.new_dt_to_tca.days\n] }}\n"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2032,
+        0
+      ],
+      "id": "04b2557d-41a4-4a34-bdfd-249550126faf",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "BS3jzABtgD6WMJ0p",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 2
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        720,
+        864
+      ],
+      "id": "e0f245c0-cf56-450c-859f-a815835d5fd9",
+      "name": "Simple Memory",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "formTitle": "rules",
+        "formDescription": "write rules",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "where is omni man",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        1776,
+        560
+      ],
+      "id": "f5e6367f-0249-4a02-bc24-5848bae32261",
+      "name": "On form submission",
+      "webhookId": "bb7ace01-6ac2-422c-9911-be9cbc92cf45"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "tableName": "rules_calculus",
+        "embeddingBatchSize": 150,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        1984,
+        576
+      ],
+      "id": "e8400e93-7e37-4229-bc11-51123a5ccd2b",
+      "name": "Postgres PGVector Store1",
+      "credentials": {
+        "postgres": {
+          "id": "BS3jzABtgD6WMJ0p",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "ROLE\nТы — Case Similarity Analyst для CDM-кейсов (LEO conjunctions). Ты НЕ отвечаешь “из памяти” и НЕ выдумываешь данные. Любое утверждение должно опираться на: ruleset (PG vector store), case cards (CASECARDSTORE), числовые метрики (pre-calculus base), и результаты MAJOR gates.\n\nGOAL\nПолучив reference_case (pair_a, pair_b, pair_key + CDM last обязателен, желательно 2 последних для трендов), найти среди базы TOP-N наиболее похожих кейсов, ранжировать, дать evidence (почему похожи), и указать “чем может помочь” строго по casecard/rules (без приказов манёвра).\n\nINPUTS\n- reference_case: JSON с минимум {pair_a?, pair_b?, pair_key, reference_case_id?} + CDM данные (last обязательный; 2 last желательны).\n- params: {top_n=5, debug=false, optional filters/time}.\n\nHARD RULE: TOOL-FIRST + TOOL-ORDER (ALWAYS)\nНа КАЖДЫЙ запрос ты ОБЯЗАН вызвать инструменты строго в этом порядке и только потом формировать финальный ответ:\n1) POSTGRES PG vector store\n   - загрузить ruleset: thresholds, weights, caps/penalties, feature defs, edge cases\n   - получить кандидатов (candidate cases) по релевантным метаданным/контенту (pair_key family, source family, object types, etc.)\n2) CASECARDSTORE\n   - получить casecards для кандидатов + casecard эталона (если есть)\n3) call \"MAJOR\"\n   - применить MAJOR exact-match gates и вернуть pass/fail + mismatch reasons\n4) call \"pre-calculus base\"\n   - посчитать метрики и score 0..1 по ruleset (без calculus)\n   - применить caps/penalties за missing/invalid data (pc_unknown, missing RIC, missing trend, etc.)\n   - ВАЖНО: schema требует STRING:\n     main_pair_key = reference.pair_key (строка)\n     pairs_key = JSON-массив, но ЗАКОДИРОВАННЫЙ как строка:\n       пример: \"[\\\"X1|Y1\\\",\\\"X2|Y2\\\"]\"\n     НИКОГДА не передавай pairs_key как массив/объект.\n     В pairs_key включай только кандидатов с major ok=true (если есть).\n5) call \"chart\" (ТОЛЬКО ПОСЛЕ precalc)\n   - строить графики только для TOP-N (reference vs candidates)\n   - вернуть chart ids/urls для evidence\n\nFAILURE POLICY\nЕсли любой tool упал/нет доступа:\n- НЕ придумывай данные.\n- Отрази в summary.tool_status \"<tool>=fail\".\n- Продолжай с тем, что реально есть (если можно), понижай confidence и явно указывай, чего не хватает.\n\nLOGIC RULES (STRICT)\n- Никаких “кажется/возможно” без rule/casecard/метрик.\n- Лейблы (VerySimilar/Similar/Weak) присваивай ТОЛЬКО по thresholds из ruleset. Если thresholds не получены → label=\"Weak\" и missing_flags += [\"missing_label_thresholds\"].\n- pc отсутствует/нулевой/невалидный → missing_flags += [\"pc_unknown\"] и применяй cap из ruleset.\n- Все расчёты: алгебра, нормы, проценты, abs diff, rel diff, log10. Никаких интегралов/производных.\n\nRANKING\n- primary: итоговый score (ruleset)\n- tie-breakers (если score равен): меньший Δtca, меньший |ΔlogPc|, меньший rel(miss), лучше совпадение RIC shape (как определено ruleset)\n\nOUTPUT: FINAL_RESPONSE_V1 (STRICT, LAST MESSAGE ONLY JSON)\nТвоё последнее сообщение ДОЛЖНО быть ТОЛЬКО валидный JSON (начинается \"{\" и заканчивается \"}\"). Никакого markdown/текста до/после.\n\nЗапрещено:\n- top-level ключ \"output\"\n- отдавать сырые tool payload как финальный ответ\nСырые tool payload допускаются ТОЛЬКО при debug=true в debug_raw.tool_payload.\n\nРазрешённые top-level ключи:\nsummary, top3_table, evidence_packs, recommendation, workflow_inputs_for_chart, debug_raw (только если debug=true)\n\nОбязательные секции (иначе ответ НЕВАЛИДЕН):\n1) summary:\n   - reference_pair_key, top_n, candidates_considered\n   - tool_status: {pg_vector, casecardstore, major, precalc, chart} = ok|fail\n   - confidence: High|Med|Low (правило: High если все tools ok и мало missing_flags; иначе Med/Low)\n2) top3_table: ровно 3 элемента (если кандидатов <3 — заполни тем, что есть и явно укажи missing_flags [\"insufficient_candidates\"])\n   - {rank, case_id, pair_key, score, label, major_pass, missing_flags[]}\n3) evidence_packs: для rank 1..3 (по наличию)\n   - why_similar: 3–7 measurable facts (Δtca, miss, RIC rel diffs, dominant axis+sign, |ΔlogPc|, rel(sig), rel(vrel), trend match)\n   - rules_fired: [{rule_id, name}] только из PG ruleset\n   - charts: [{chart_id, url_or_id}] только из call \"chart\"\n   - how_it_can_help: только из casecard (действия/решения/notes) + почему релевантно по совпавшим метрикам\n   - mismatches_and_risks: 2–5 честных пунктов\n4) recommendation:\n   - best_candidate_pair_key\n   - what_to_reuse_from_casecard: [...]\n   - what_to_check_next: [{rule_id, check}]\n5) workflow_inputs_for_chart:\n   - pair_a, pair_b, pair_a(other), pair_b(other), pair_a(other1), pair_b(other1), pair_a(other2), pair_b(other2)\n   - В ЭТИ ПОЛЯ ТОЛЬКО ИМЕНА ОБЪЕКТОВ (НЕ id/norad/cdm_id).\n   - Если имени нет: derive из pair_key split(\"|\") (лево/право).\n   - \"объяснение\": коротко: ref pair_key + TOP3(pair_key/score/label) + почему отправлены в chart.\n\nSELF-CHECK BEFORE RETURN (MANDATORY)\nПеред финальным выводом проверь:\n- JSON валиден\n- есть все обязательные секции и ключи\n- нет запрещённых top-level ключей\n- tool_status заполнен ok/fail по факту\n- нет “сырых массивов” из tools вне debug_raw (и только при debug=true)",
+          "returnIntermediateSteps": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        784,
+        640
+      ],
+      "id": "44fdacac-f67e-4c47-a856-d9fbd52ebf1b",
+      "name": "AI Agent",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "function safeJsonParse(x) {\n  try { return JSON.parse(x); } catch { return null; }\n}\n\nfunction extractPairByRegex(s) {\n  const reA = /\\\\?\"pair_a\\\\?\"\\s*:\\s*\\\\?\"([^\"]+)\\\\?\"/i;\n  const reB = /\\\\?\"pair_b\\\\?\"\\s*:\\s*\\\\?\"([^\"]+)\\\\?\"/i;\n  const ma = reA.exec(s);\n  const mb = reB.exec(s);\n  if (!ma || !mb) return null;\n\n  const unesc = (t) =>\n    String(t)\n      .replace(/\\\\\"/g, '\"')\n      .replace(/\\\\n/g, \"\\n\")\n      .replace(/\\\\t/g, \"\\t\")\n      .trim();\n\n  return { pair_a: unesc(ma[1]), pair_b: unesc(mb[1]) };\n}\n\nfunction norm(v) {\n  return String(v ?? \"\")\n    .replace(/[\\u200B-\\u200D\\uFEFF]/g, \"\") // zero-width\n    .replace(/\\s+/g, \" \")\n    .trim()\n    .toLowerCase();\n}\n\nfunction fnv1a32(str) {\n  let h = 0x811c9dc5;\n  for (let i = 0; i < str.length; i++) {\n    h ^= str.charCodeAt(i);\n    h = Math.imul(h, 0x01000193);\n  }\n  return h >>> 0;\n}\n\n// Универсально достаёт pair_a/pair_b из объекта результата Postgres\nfunction extractPairSmart(obj) {\n  if (obj == null) throw new Error(\"Входной объект пустой (null/undefined).\");\n\n  const rec = Array.isArray(obj) ? obj[0] : obj;\n\n  // 1) прямые поля\n  if (rec?.pair_a && rec?.pair_b) {\n    return { pair_a: String(rec.pair_a), pair_b: String(rec.pair_b) };\n  }\n\n  // 2) series_label: \"A vs B\"\n  if (typeof rec?.series_label === \"string\") {\n    const parts = rec.series_label.split(/\\s+vs\\s+/i);\n    if (parts.length === 2 && parts[0] && parts[1]) {\n      return { pair_a: parts[0].trim(), pair_b: parts[1].trim() };\n    }\n  }\n\n  // 3) cdm_json: object_name из CDM\n  if (rec?.cdm_json != null) {\n    const cdm = (typeof rec.cdm_json === \"string\") ? safeJsonParse(rec.cdm_json) : rec.cdm_json;\n    const a = cdm?.objects?.object1?.metadata?.object_name;\n    const b = cdm?.objects?.object2?.metadata?.object_name;\n    if (a && b) return { pair_a: String(a), pair_b: String(b) };\n  }\n\n  // 4) regex fallback по всей структуре\n  const s = JSON.stringify(obj);\n  const r = extractPairByRegex(s);\n  if (r) return r;\n\n  // debug-подсказка\n  throw new Error(\n    \"Не нашёл pair_a/pair_b. Доступные ключи первой строки: \" +\n    Object.keys(rec || {}).join(\", \")\n  );\n}\n\n// ---- MAIN ----\nconst all = (typeof $input !== \"undefined\" && $input.all) ? $input.all() : items;\nif (!all || all.length === 0) throw new Error(\"Нет входных items после Postgres.\");\n\nconst first = all[0].json;\nconst src = (first && first.output != null) ? first.output : first; // ключевой фикс\n\nconst { pair_a, pair_b } = extractPairSmart(src);\nconst pair_canon = [norm(pair_a), norm(pair_b)].sort().join(\"|\");\nconst pair_key = fnv1a32(pair_canon);\n\n// добавляем к каждой строке результата (каждому item)\nreturn all.map((it) => ({\n  json: {\n    ...it.json,\n    pair_a,\n    pair_b,\n    pair_canon,\n    pair_key,\n  }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1616,
+        320
+      ],
+      "id": "012cbc5e-4d4c-46d8-bdde-71257b84608d",
+      "name": "pair_key",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// INPUT:\n//   $input.first().json.output    -> строка/объект с 2 CDM (валидный JSON) ИЛИ root.output=null но 2 items\n//   $input.first().json.pair_key  -> отдельно (НЕ внутри output)\n// OUTPUT:\n//   исходный input JSON НЕ ТРОГАЕМ + добавляем analysis\n// ВАЖНО (твой кейс): #1 = САМЫЙ СТАРЫЙ, #N = САМЫЙ НОВЫЙ\n\nfunction safeJsonParse(x) {\n  try { return JSON.parse(x); } catch { return null; }\n}\n\nfunction toNumber(v) {\n  if (v === undefined || v === null) return null;\n\n  // {unit, value}\n  if (typeof v === \"object\") {\n    if (v && Object.prototype.hasOwnProperty.call(v, \"value\")) return toNumber(v.value);\n    return null;\n  }\n\n  if (typeof v === \"number\") return Number.isFinite(v) ? v : null;\n\n  const s = String(v).trim();\n  if (!s) return null;\n  const n = Number(s);\n  return Number.isFinite(n) ? n : null;\n}\n\nfunction pick(obj, keys) {\n  for (const k of keys) if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];\n  return undefined;\n}\n\nfunction pct(oldVal, newVal) {\n  if (oldVal === null || newVal === null) return null;\n  if (oldVal === 0) return null;\n  return ((newVal - oldVal) / oldVal) * 100;\n}\n\nfunction parseOutput(output) {\n  if (output == null) throw new Error(\"output пустой\");\n\n  if (typeof output === \"object\") {\n    if (typeof output.message === \"string\") return JSON.parse(output.message);\n    return output;\n  }\n\n  const s = String(output).trim();\n  const p = JSON.parse(s);\n\n  if (p && typeof p === \"object\" && typeof p.message === \"string\") return JSON.parse(p.message);\n  if (typeof p === \"string\") return JSON.parse(p.trim());\n\n  return p;\n}\n\nfunction getTwoCdms(parsed) {\n  if (Array.isArray(parsed) && parsed.length >= 2) return [parsed[0], parsed[1]];\n  if (parsed && parsed.old && parsed.new) return [parsed.old, parsed.new];\n  if (parsed && Array.isArray(parsed.cdms) && parsed.cdms.length >= 2) return [parsed.cdms[0], parsed.cdms[1]];\n  if (parsed && Array.isArray(parsed.output) && parsed.output.length >= 2) return [parsed.output[0], parsed.output[1]];\n  throw new Error(\"Не нашёл 2 CDM. Нужен формат: [a,b] или {old,new} или {cdms:[..]}/{output:[..]}\");\n}\n\nfunction getCdmId(cdm) {\n  const id = pick(cdm, [\"cdm_id\", \"CDM_ID\", \"id\", \"message_id\", \"messageId\"]);\n  if (id === undefined) throw new Error(\"Не найден CDM id (cdm_id/CDM_ID/id/message_id).\");\n  return String(id);\n}\n\n// freshness: #1 старый, #N новый\nfunction getFreshness(cdm) {\n  const f = pick(cdm, [\"freshness\", \"Freshness\", \"FRESHNESS\", \"cdm_label\", \"cdmLabel\", \"cdm_n\", \"cdmN\"]);\n  if (f === undefined) return null;\n  if (typeof f === \"number\") return `#${f}`;\n  return String(f);\n}\nfunction freshnessRank(f) {\n  const m = String(f ?? \"\").match(/#\\s*(\\d+)/);\n  return m ? Number(m[1]) : null;\n}\nfunction pickOldNewByFreshness(a, b) {\n  const ra = freshnessRank(getFreshness(a));\n  const rb = freshnessRank(getFreshness(b));\n\n  // ТВОЯ СХЕМА: #1 = старый, #N = новый\n  if (ra != null && rb != null) {\n    const oldCdm = ra < rb ? a : b; // меньше номер => старее\n    const newCdm = ra < rb ? b : a; // больше номер => новее\n    return { oldCdm, newCdm };\n  }\n\n  // fallback: как пришло\n  return { oldCdm: a, newCdm: b };\n}\n\nfunction getMetrics(cdm) {\n  return {\n    pc: toNumber(pick(cdm, [\"pc\", \"Pc\", \"PC\", \"collision_probability\", \"collisionProbability\"])),\n    miss_distance: toNumber(pick(cdm, [\"miss_distance\", \"missDistance\", \"miss_m\", \"missM\", \"miss_distance_km\"])),\n    rel_speed: toNumber(pick(cdm, [\"rel_speed\", \"relative_speed\", \"relSpeed\", \"relativeSpeed\"]))\n  };\n}\n\n// --- COVARIANCE (diag pos_pos in RTN) ---\nfunction getCovDiag(cdm) {\n  const flat = {\n    c1_rr: toNumber(pick(cdm, [\"c1_rr\", \"c1RR\"])),\n    c1_tt: toNumber(pick(cdm, [\"c1_tt\", \"c1TT\"])),\n    c1_nn: toNumber(pick(cdm, [\"c1_nn\", \"c1NN\"])),\n    c2_rr: toNumber(pick(cdm, [\"c2_rr\", \"c2RR\"])),\n    c2_tt: toNumber(pick(cdm, [\"c2_tt\", \"c2TT\"])),\n    c2_nn: toNumber(pick(cdm, [\"c2_nn\", \"c2NN\"]))\n  };\n\n  const flatOk = [flat.c1_rr, flat.c1_tt, flat.c1_nn, flat.c2_rr, flat.c2_tt, flat.c2_nn].every(v => v !== null);\n  if (flatOk) {\n    return {\n      object1: { rr: flat.c1_rr, tt: flat.c1_tt, nn: flat.c1_nn },\n      object2: { rr: flat.c2_rr, tt: flat.c2_tt, nn: flat.c2_nn }\n    };\n  }\n\n  const cdmJson = cdm?.cdm_json != null\n    ? (typeof cdm.cdm_json === \"string\" ? safeJsonParse(cdm.cdm_json) : cdm.cdm_json)\n    : null;\n\n  const raw = cdmJson || cdm;\n\n  const o1 = raw?.objects?.object1?.covariance_rtn?.pos_pos;\n  const o2 = raw?.objects?.object2?.covariance_rtn?.pos_pos;\n\n  const c1_rr = toNumber(o1?.cr_r);\n  const c1_tt = toNumber(o1?.ct_t);\n  const c1_nn = toNumber(o1?.cn_n);\n\n  const c2_rr = toNumber(o2?.cr_r);\n  const c2_tt = toNumber(o2?.ct_t);\n  const c2_nn = toNumber(o2?.cn_n);\n\n  return {\n    object1: { rr: c1_rr, tt: c1_tt, nn: c1_nn },\n    object2: { rr: c2_rr, tt: c2_tt, nn: c2_nn }\n  };\n}\n\nfunction sqrtPos(x) {\n  if (x === null || x === undefined) return null;\n  if (typeof x !== \"number\") return null;\n  if (!Number.isFinite(x) || x < 0) return null;\n  return Math.sqrt(x);\n}\n\nfunction combineCovDiag(cov) {\n  const rr = (cov.object1.rr === null || cov.object2.rr === null) ? null : (cov.object1.rr + cov.object2.rr);\n  const tt = (cov.object1.tt === null || cov.object2.tt === null) ? null : (cov.object1.tt + cov.object2.tt);\n  const nn = (cov.object1.nn === null || cov.object2.nn === null) ? null : (cov.object1.nn + cov.object2.nn);\n\n  const trace = (rr === null || tt === null || nn === null) ? null : (rr + tt + nn);\n\n  const sigma_r = sqrtPos(rr);\n  const sigma_t = sqrtPos(tt);\n  const sigma_n = sqrtPos(nn);\n\n  const sigma_rss = sqrtPos(trace);\n\n  const sigma_max = (sigma_r == null && sigma_t == null && sigma_n == null)\n    ? null\n    : Math.max(sigma_r ?? -Infinity, sigma_t ?? -Infinity, sigma_n ?? -Infinity);\n\n  return {\n    cov_total_diag_m2: { rr, tt, nn },\n    cov_total_trace_m2: trace,\n    sigma_1s_m: { r: sigma_r, t: sigma_t, n: sigma_n },\n    sigma_rss_1s_m: sigma_rss,\n    sigma_max_1s_m: sigma_max\n  };\n}\n\nfunction deltaObj(oldObj, newObj) {\n  const out = {};\n  for (const k of Object.keys(oldObj)) {\n    const a = oldObj[k];\n    const b = newObj[k];\n    out[k] = (a === null || b === null) ? null : (b - a);\n  }\n  return out;\n}\n\nfunction pctObj(oldObj, newObj) {\n  const out = {};\n  for (const k of Object.keys(oldObj)) out[k] = pct(oldObj[k], newObj[k]);\n  return out;\n}\n\n// ---- Δt to TCA (TCA - creation_date) ----\nfunction parseIsoAsUtcMaybe(v) {\n  if (v === undefined || v === null) return null;\n  const s0 = String(v).trim();\n  if (!s0) return null;\n\n  const hasTz = /([zZ]|[+\\-]\\d{2}:?\\d{2})$/.test(s0);\n  const s = hasTz ? s0 : (s0 + \"Z\");\n\n  const d = new Date(s);\n  if (!Number.isFinite(d.getTime())) return null;\n  return d;\n}\n\nfunction getRawCdm(cdm) {\n  const cdmJson = cdm?.cdm_json != null\n    ? (typeof cdm.cdm_json === \"string\" ? safeJsonParse(cdm.cdm_json) : cdm.cdm_json)\n    : null;\n  return cdmJson || cdm;\n}\n\nfunction getTcaIso(raw) {\n  return (\n    pick(raw, [\"tca\", \"TCA\"]) ??\n    raw?.relative_metadata_data?.tca ??\n    raw?.relativeMetadataData?.tca\n  );\n}\n\nfunction getCreationIso(raw, fallbackObj) {\n  return (\n    pick(raw, [\"creation_date\", \"creationDate\", \"CREATION_DATE\"]) ??\n    pick(fallbackObj, [\"creation_date\", \"creationDate\", \"CREATION_DATE\"]) ??\n    pick(fallbackObj, [\"created_at\", \"createdAt\"])\n  );\n}\n\nfunction dtToTca(cdm) {\n  const raw = getRawCdm(cdm);\n\n  const tcaIso = getTcaIso(raw);\n  const creIso = getCreationIso(raw, cdm);\n\n  const tca = parseIsoAsUtcMaybe(tcaIso);\n  const cre = parseIsoAsUtcMaybe(creIso);\n\n  if (!tca || !cre) {\n    return {\n      tca_iso: tcaIso ?? null,\n      creation_iso: creIso ?? null,\n      ms: null,\n      seconds: null,\n      hours: null,\n      days: null\n    };\n  }\n\n  const ms = tca.getTime() - cre.getTime(); // Δt = TCA - creation_date\n  return {\n    tca_iso: tca.toISOString(),\n    creation_iso: cre.toISOString(),\n    ms,\n    seconds: ms / 1000,\n    hours: ms / 3600000,\n    days: ms / 86400000\n  };\n}\n\n// ---- НОВОЕ: берем значения из On form submission1 ----\nfunction normRank(x) {\n  if (x === undefined || x === null) return null;\n  const s = String(x).trim();\n  if (!s) return null;\n  const m = s.match(/#?\\s*(\\d+)/);\n  return m ? Number(m[1]) : null;\n}\n\nfunction getFormJson() {\n  const j = $('On form submission1').first().json;\n  return (j && typeof j === \"object\") ? j : {};\n}\n\nfunction getFormSecondN(form) {\n  return (\n    form[\" SECOND N\"] ??\n    form[\"SECOND N\"] ??\n    form[\"SECOND_N\"] ??\n    form[\"second_n\"] ??\n    null\n  );\n}\n\n// ====== ВАЖНОЕ ИЗМЕНЕНИЕ: берем НЕ \"pair_a and pair_b\", а ОТДЕЛЬНО pair_a / pair_b ======\nfunction getFormPairAB(form) {\n  // строго отдельные поля\n  const a = form.pair_a ?? form.pairA ?? form.PAIR_A ?? null;\n  const b = form.pair_b ?? form.pairB ?? form.PAIR_B ?? null;\n  return { pair_a: a, pair_b: b };\n}\n\n// ---- MAIN ----\nconst all = $input.all();\nif (!all || all.length === 0) throw new Error(\"Вход пустой: нет items.\");\n\nconst root = all[0].json;\nconst pair_key = pick(root, [\"pair_key\", \"pairKey\", \"PAIR_KEY\"]) ?? null;\n\nlet cdmA, cdmB;\n\nif (root.output != null) {\n  const parsed = parseOutput(root.output);\n  [cdmA, cdmB] = getTwoCdms(parsed);\n} else if (all.length >= 2) {\n  cdmA = all[0].json;\n  cdmB = all[1].json;\n} else {\n  throw new Error(\"Нет root.output и меньше 2 items (нужно 2 CDM).\");\n}\n\nconst { oldCdm, newCdm } = pickOldNewByFreshness(cdmA, cdmB);\n\nconst FROM_CDM_ID = getCdmId(oldCdm);\nconst TO_CDM_ID   = getCdmId(newCdm);\n\nconst old_freshness = getFreshness(oldCdm);\nconst new_freshness = getFreshness(newCdm);\n\nconst form = getFormJson();\nconst formN = normRank(form.N);\nconst formSecondN = normRank(getFormSecondN(form));\n\nconst old_rank = freshnessRank(old_freshness);\nconst new_rank = freshnessRank(new_freshness);\n\nconst freshness_pair =\n  (formN != null && formSecondN != null) ? `${formN}vs${formSecondN}`\n  : (old_rank != null && new_rank != null) ? `${old_rank}vs${new_rank}`\n  : null;\n\n// ✅ pair_a / pair_b берём отдельно\nconst { pair_a, pair_b } = getFormPairAB(form);\n\nconst old_values = getMetrics(oldCdm);\nconst new_values = getMetrics(newCdm);\n\nconst delta_values = {\n  pc: (old_values.pc === null || new_values.pc === null) ? null : (new_values.pc - old_values.pc),\n  miss_distance: (old_values.miss_distance === null || new_values.miss_distance === null) ? null : (new_values.miss_distance - old_values.miss_distance),\n  rel_speed: (old_values.rel_speed === null || new_values.rel_speed === null) ? null : (new_values.rel_speed - old_values.rel_speed)\n};\n\nconst percent_change = {\n  pc: pct(old_values.pc, new_values.pc),\n  miss_distance: pct(old_values.miss_distance, new_values.miss_distance),\n  rel_speed: pct(old_values.rel_speed, new_values.rel_speed)\n};\n\nconst old_cov = getCovDiag(oldCdm);\nconst new_cov = getCovDiag(newCdm);\n\nconst old_cov_total = combineCovDiag(old_cov);\nconst new_cov_total = combineCovDiag(new_cov);\n\nconst cov_delta = {\n  cov_total_diag_m2: deltaObj(old_cov_total.cov_total_diag_m2, new_cov_total.cov_total_diag_m2),\n  cov_total_trace_m2: (old_cov_total.cov_total_trace_m2 === null || new_cov_total.cov_total_trace_m2 === null)\n    ? null\n    : (new_cov_total.cov_total_trace_m2 - old_cov_total.cov_total_trace_m2),\n  sigma_1s_m: deltaObj(old_cov_total.sigma_1s_m, new_cov_total.sigma_1s_m),\n  sigma_rss_1s_m: (old_cov_total.sigma_rss_1s_m === null || new_cov_total.sigma_rss_1s_m === null)\n    ? null\n    : (new_cov_total.sigma_rss_1s_m - old_cov_total.sigma_rss_1s_m),\n  sigma_max_1s_m: (old_cov_total.sigma_max_1s_m === null || new_cov_total.sigma_max_1s_m === null)\n    ? null\n    : (new_cov_total.sigma_max_1s_m - old_cov_total.sigma_max_1s_m)\n};\n\nconst cov_pct = {\n  cov_total_diag_m2: pctObj(old_cov_total.cov_total_diag_m2, new_cov_total.cov_total_diag_m2),\n  cov_total_trace_m2: pct(old_cov_total.cov_total_trace_m2, new_cov_total.cov_total_trace_m2),\n  sigma_1s_m: pctObj(old_cov_total.sigma_1s_m, new_cov_total.sigma_1s_m),\n  sigma_rss_1s_m: pct(old_cov_total.sigma_rss_1s_m, new_cov_total.sigma_rss_1s_m),\n  sigma_max_1s_m: pct(old_cov_total.sigma_max_1s_m, new_cov_total.sigma_max_1s_m)\n};\n\nconst old_dt_to_tca = dtToTca(oldCdm);\nconst new_dt_to_tca = dtToTca(newCdm);\n\nconst delta_dt_to_tca = {\n  ms: (old_dt_to_tca.ms == null || new_dt_to_tca.ms == null) ? null : (new_dt_to_tca.ms - old_dt_to_tca.ms),\n  seconds: (old_dt_to_tca.seconds == null || new_dt_to_tca.seconds == null) ? null : (new_dt_to_tca.seconds - old_dt_to_tca.seconds),\n  hours: (old_dt_to_tca.hours == null || new_dt_to_tca.hours == null) ? null : (new_dt_to_tca.hours - old_dt_to_tca.hours),\n  days: (old_dt_to_tca.days == null || new_dt_to_tca.days == null) ? null : (new_dt_to_tca.days - old_dt_to_tca.days)\n};\n\nconst out = { ...root };\n\n// добавляем pair_a/pair_b в топ-левел (как столбцы)\nif (out.pair_a == null) out.pair_a = pair_a;\nif (out.pair_b == null) out.pair_b = pair_b;\n\nout.analysis = {\n  pair_key,\n  FROM_CDM_ID,\n  TO_CDM_ID,\n  old_freshness,\n  new_freshness,\n\n  freshness_pair,\n  form_N: form.N ?? null,\n  form_SECOND_N: getFormSecondN(form),\n\n  old_dt_to_tca,\n  new_dt_to_tca,\n  delta_dt_to_tca,\n\n  old_values,\n  new_values,\n  delta_values,\n  percent_change,\n\n  old_cov_diag_m2: old_cov,\n  new_cov_diag_m2: new_cov,\n  old_cov_total: old_cov_total,\n  new_cov_total: new_cov_total,\n  cov_delta: cov_delta,\n  cov_percent_change: cov_pct\n};\n\nreturn [{ json: out }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        32
+      ],
+      "id": "9ee47b15-989b-4f43-8656-2f9b41014686",
+      "name": "DIFF"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "Select cdm_json\nFROM cdm_messages\nwhere\n  least(upper(trim(pair_a)), upper(trim(pair_b))) =\n  least(upper(trim($1)), upper(trim($2)))\nand\n  greatest(upper(trim(pair_a)), upper(trim(pair_b))) =\n  greatest(upper(trim($1)), upper(trim($2)))\norder by coalesce(nullif(creation_date,'')::timestamptz, created_at) desc",
+        "options": {
+          "queryReplacement": "=$1 = {{ $json.pair_a }}  \n$2 = {{ $json.pair_b }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        160,
+        0
+      ],
+      "id": "945d20c4-154a-4634-ad47-e35a39fefa78",
+      "name": "Execute a SQL query2",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2fetuh0Apnozq8Vi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "formTitle": "фвфыдвы",
+        "formDescription": "pair_a",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "pair_a",
+              "fieldType": "textarea"
+            },
+            {
+              "fieldLabel": "pair_b",
+              "fieldType": "textarea"
+            },
+            {
+              "fieldLabel": "N",
+              "fieldType": "textarea"
+            },
+            {
+              "fieldLabel": " SECOND N",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        1232,
+        352
+      ],
+      "id": "3fddf896-cd13-40c9-bb67-ac0244275622",
+      "name": "On form submission1",
+      "webhookId": "fc973f9f-832d-4f7a-a783-cace054ec037"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node (JavaScript)\n// Input: item.json = CDM OR item.json.cdm_json = CDM (object or JSON string)\n// Output: json.source_family + json.maneuverable + json.object_type_pair + json.dominant_miss_axis_ric\n\nfunction asObject(maybeJson) {\n  if (maybeJson == null) return null;\n  if (typeof maybeJson === \"object\") return maybeJson;\n  if (typeof maybeJson === \"string\") {\n    try { return JSON.parse(maybeJson); } catch { return null; }\n  }\n  return null;\n}\n\nfunction pickFirst(obj, keys) {\n  for (const k of keys) {\n    if (obj && obj[k] != null && obj[k] !== \"\") return obj[k];\n  }\n  return null;\n}\n\nfunction uniqNonEmpty(arr) {\n  return [...new Set(arr.filter(v => v != null && v !== \"\"))];\n}\n\nfunction normalizeBool(val) {\n  if (val === true) return true;\n  if (val === false) return false;\n  return null; // unknown\n}\n\nfunction boolToTFU(val) {\n  if (val === true) return \"true\";\n  if (val === false) return \"false\";\n  return \"unknown\";\n}\n\nfunction normalizeObjectType(raw) {\n  if (!raw) return \"unknown\";\n  const s = String(raw).trim().toUpperCase();\n\n  // CCSDS-ish / SATCAT-ish variants\n  if (s.includes(\"PAYLOAD\")) return \"payload\";\n  if (s.includes(\"DEBRIS\")) return \"debris\";\n  if (s.includes(\"ROCKET\") || s.includes(\"R/B\") || s.includes(\"RB\") || s.includes(\"BODY\")) return \"rocket body\";\n  if (s.includes(\"UNKNOWN\")) return \"unknown\";\n\n  // fallback\n  return String(raw).trim().toLowerCase();\n}\n\nfunction canonicalPairLabel(a, b, sep = \"–\") {\n  const A = a ?? \"unknown\";\n  const B = b ?? \"unknown\";\n  return [A, B].sort((x, y) => x.localeCompare(y)).join(sep);\n}\n\nfunction dominantAxisRICFromRTN(relPosRTN) {\n  // relPosRTN expected keys: r, t, n (meters)\n  if (!relPosRTN || typeof relPosRTN !== \"object\") return \"unknown\";\n\n  const r = Number(relPosRTN.r);\n  const t = Number(relPosRTN.t);\n  const n = Number(relPosRTN.n);\n\n  if (![r, t, n].every(v => Number.isFinite(v))) return \"unknown\";\n\n  const ar = Math.abs(r), at = Math.abs(t), an = Math.abs(n);\n  const max = Math.max(ar, at, an);\n\n  if (max === 0) return \"unknown\";\n\n  // tie protection: если разница между top-2 < 1% — считаем неопределённым\n  const sorted = [ar, at, an].sort((a, b) => b - a);\n  if (sorted[1] / sorted[0] > 0.99) return \"unknown\";\n\n  // RTN -> RIC mapping:\n  // r (radial) -> R\n  // t (along-track) -> I\n  // n (cross-track) -> C\n  if (max === ar) return \"R\";\n  if (max === at) return \"I\";\n  if (max === an) return \"C\";\n  return \"unknown\";\n}\n\nconst items = $input.all();\n\nreturn items.map((item) => {\n  const cdm = asObject(item.json?.cdm_json) ?? asObject(item.json) ?? {};\n\n  // provider: обычно originator (у тебя \"SKIBIDI\")\n  const provider = pickFirst(cdm, [\"provider\", \"originator\", \"source\", \"message_originator\"]);\n\n  const objects = (cdm && typeof cdm === \"object\" && cdm.objects && typeof cdm.objects === \"object\")\n    ? cdm.objects\n    : {};\n\n  // ожидаем object1/object2, но код не зависит от имён ключей\n  const objEntries = Object.entries(objects);\n\n  const byObject = {};\n  const allCatalogs = [];\n  const allEphemeris = [];\n  const allCovMethods = [];\n  const maneuverables = [];\n  const objectTypes = [];\n\n  for (const [objKey, objVal] of objEntries) {\n    const md = objVal?.metadata ?? {};\n\n    const catalog_name = md?.catalog_name ?? null;\n    const ephemeris_name = md?.ephemeris_name ?? null;\n    const covariance_method = md?.covariance_method ?? null;\n\n    const maneuverableRaw = normalizeBool(md?.maneuverable);\n    const maneuverableTFU = boolToTFU(maneuverableRaw);\n\n    const object_type_norm = normalizeObjectType(md?.object_type);\n\n    byObject[objKey] = {\n      object: md?.object ?? objKey,\n      object_name: md?.object_name ?? null,\n      object_type_raw: md?.object_type ?? null,\n      object_type: object_type_norm,\n      maneuverable: maneuverableTFU,\n      catalog_name,\n      ephemeris_name,\n      covariance_method,\n    };\n\n    allCatalogs.push(catalog_name);\n    allEphemeris.push(ephemeris_name);\n    allCovMethods.push(covariance_method);\n    maneuverables.push(maneuverableRaw);\n    objectTypes.push(object_type_norm);\n  }\n\n  // maneuverable по паре: true/false/unknown (если смешано или не хватает данных — unknown)\n  let maneuverable_pair = \"unknown\";\n  if (maneuverables.length >= 2) {\n    const a = maneuverables[0], b = maneuverables[1];\n    if (a === true && b === true) maneuverable_pair = \"true\";\n    else if (a === false && b === false) maneuverable_pair = \"false\";\n    else maneuverable_pair = \"unknown\"; // mixed/unknown\n  } else if (maneuverables.length === 1) {\n    maneuverable_pair = boolToTFU(maneuverables[0]);\n  }\n\n  // object type pair (канонический, чтобы порядок не шумел)\n  const object_type_pair = canonicalPairLabel(objectTypes[0] ?? \"unknown\", objectTypes[1] ?? \"unknown\");\n\n  // dominant miss-vector axis (RIC) from relative_position_rtn_m\n  const relPosRTN = cdm?.relative_metadata_data?.relative_position_rtn_m ?? null;\n  const dominant_miss_axis_ric = dominantAxisRICFromRTN(relPosRTN);\n\n  const source_family = {\n    provider,\n    catalogs: uniqNonEmpty(allCatalogs),\n    ephemeris: uniqNonEmpty(allEphemeris),\n    covariance_methods: uniqNonEmpty(allCovMethods),\n\n    signature: [\n      provider ?? \"NA\",\n      ...uniqNonEmpty(allCatalogs),\n      ...uniqNonEmpty(allEphemeris),\n      ...uniqNonEmpty(allCovMethods),\n    ].join(\"|\"),\n  };\n\n  return {\n    json: {\n      message_id: cdm?.message_id ?? null,\n      creation_date: cdm?.creation_date ?? null,\n      ccsds_cdm_vers: cdm?.ccsds_cdm_vers ?? null,\n\n      source_family,\n      source_family_by_object: byObject,\n\n      maneuverable: maneuverable_pair,\n      maneuverable_by_object: Object.fromEntries(\n        Object.entries(byObject).map(([k, v]) => [k, v.maneuverable])\n      ),\n\n      object_type_pair,\n      dominant_miss_axis_ric,\n    },\n  };\n});\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        0
+      ],
+      "id": "f2fe1d68-af2a-48fa-9a07-67fcf0f5baa0",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH all_rows AS (\n  SELECT\n    'case1'::text AS series,\n    ($1::text || ' vs ' || $2::text) AS series_label,\n    pair_a,\n    pair_b,\n    cdm_json\n  FROM cdm_messages\n  WHERE\n    (lower(trim(pair_a)) = lower(trim($1)) AND lower(trim(pair_b)) = lower(trim($2)))\n    OR\n    (lower(trim(pair_a)) = lower(trim($2)) AND lower(trim(pair_b)) = lower(trim($1)))\n),\nranked AS (\n  SELECT\n    series,\n    series_label,\n    pair_a,\n    pair_b,\n    cdm_json,\n\n    COALESCE(\n      NULLIF(cdm_json::jsonb->>'message_id', ''),\n      NULLIF(cdm_json::jsonb->>'cdm_id', ''),\n      NULLIF(cdm_json::jsonb->>'id', '')\n    ) AS cdm_id,\n\n    row_number() OVER (\n      PARTITION BY series\n      ORDER BY (cdm_json::jsonb->>'creation_date')::timestamp ASC\n    ) AS cdm_n,\n\n    ('CDM #' || row_number() OVER (\n      PARTITION BY series\n      ORDER BY (cdm_json::jsonb->>'creation_date')::timestamp ASC\n    )) AS cdm_label,\n\n    (cdm_json::jsonb->>'creation_date')::timestamp AS creation_date,\n\n    COALESCE(\n      NULLIF(cdm_json::jsonb #>> '{relative_metadata_data,tca,value}', '')::timestamp,\n      NULLIF(cdm_json::jsonb #>> '{relative_metadata_data,tca}', '')::timestamp\n    ) AS tca,\n\n    COALESCE(\n      NULLIF(cdm_json::jsonb #>> '{relative_metadata_data,relative_speed,value}', '')::float8,\n      NULLIF(cdm_json::jsonb #>> '{relative_metadata_data,relative_speed}', '')::float8\n    ) AS rel_speed,\n\n    NULLIF(cdm_json::jsonb #>> '{relative_metadata_data,miss_distance,value}', '')::float8 AS miss_m,\n    NULLIF(cdm_json::jsonb #>> '{relative_metadata_data,collision_probability}', '')::float8 AS pc,\n\n    NULLIF(cdm_json::jsonb #>> '{objects,object1,covariance_rtn,pos_pos,cr_r}', '')::float8 AS c1_rr,\n    NULLIF(cdm_json::jsonb #>> '{objects,object1,covariance_rtn,pos_pos,ct_t}', '')::float8 AS c1_tt,\n    NULLIF(cdm_json::jsonb #>> '{objects,object1,covariance_rtn,pos_pos,cn_n}', '')::float8 AS c1_nn,\n\n    NULLIF(cdm_json::jsonb #>> '{objects,object2,covariance_rtn,pos_pos,cr_r}', '')::float8 AS c2_rr,\n    NULLIF(cdm_json::jsonb #>> '{objects,object2,covariance_rtn,pos_pos,ct_t}', '')::float8 AS c2_tt,\n    NULLIF(cdm_json::jsonb #>> '{objects,object2,covariance_rtn,pos_pos,cn_n}', '')::float8 AS c2_nn\n  FROM all_rows\n)\nSELECT\n  series,\n  series_label,\n  pair_a,\n  pair_b,\n  cdm_id,\n  cdm_n,\n  cdm_label,\n  creation_date,\n  tca,\n  rel_speed,\n  miss_m,\n  pc,\n  c1_rr, c1_tt, c1_nn,\n  c2_rr, c2_tt, c2_nn\nFROM ranked\nWHERE cdm_n IN ($3::int, $4::int)\nORDER BY creation_date;\n\n",
+        "options": {
+          "queryReplacement": "=$1 = {{ $json.pair_a }}  \n$2 = {{ $json.pair_b }}\n$3 = {{$json.N  }}\n$4 = {{  $json[' SECOND N'] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1456,
+        352
+      ],
+      "id": "7ef252a9-edf0-4daf-93f0-dfe7e178cd20",
+      "name": "Execute a SQL query3",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2fetuh0Apnozq8Vi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "formTitle": "фвфыдвы",
+        "formDescription": "message_id",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "message_id",
+              "fieldType": "textarea"
+            },
+            {
+              "fieldLabel": "pair_b",
+              "fieldType": "textarea"
+            },
+            {
+              "fieldLabel": "pair_a(other",
+              "fieldType": "textarea"
+            },
+            {
+              "fieldLabel": "pair_b(other)",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        -48,
+        240
+      ],
+      "id": "d4163366-9902-40c2-9694-4f232b0dc152",
+      "name": "On form submission2",
+      "webhookId": "4278ab66-f316-4129-90e6-999b86a9dc40"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "pFWavyZYNdprhQKz",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/pFWavyZYNdprhQKz",
+          "cachedResultName": "chart"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "pair_a": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pair_a', ``, 'string') }}",
+            "pair_b": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pair_b', ``, 'string') }}",
+            "pair_a(other)": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pair_a_other_', ``, 'string') }}",
+            "pair_b(other)": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pair_b_other_', ``, 'string') }}",
+            "pair_a(other1)": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pair_a_other1_', ``, 'string') }}",
+            "pair_b(other1)": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pair_b_other1_', ``, 'string') }}",
+            "обьяснение ": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('___________', ``, 'string') }}",
+            "pair_a(other2)": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pair_a_other2_', ``, 'string') }}",
+            "pair_b(other2)": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pair_b_other2_', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "pair_a",
+              "displayName": "pair_a",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "pair_b",
+              "displayName": "pair_b",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "pair_a(other)",
+              "displayName": "pair_a(other)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "pair_b(other)",
+              "displayName": "pair_b(other)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "обьяснение ",
+              "displayName": "обьяснение ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "pair_a(other1)",
+              "displayName": "pair_a(other1)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "pair_b(other1)",
+              "displayName": "pair_b(other1)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "pair_a(other2)",
+              "displayName": "pair_a(other2)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "pair_b(other2)",
+              "displayName": "pair_b(other2)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1056,
+        880
+      ],
+      "id": "862fd832-6dbf-414f-866c-eb9dcc7efbe3",
+      "name": "Call 'chart'"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- 0) Добавляем колонку (если её ещё нет)\nALTER TABLE cdm_messages\nADD COLUMN IF NOT EXISTS creation_date timestamptz;\n\n-- 1) Safe-cast: текст -> timestamptz без падения при ошибке\nCREATE OR REPLACE FUNCTION safe_timestamptz(p text)\nRETURNS timestamptz\nLANGUAGE plpgsql\nIMMUTABLE\nAS $$\nBEGIN\n  IF p IS NULL OR btrim(p) = '' THEN\n    RETURN NULL;\n  END IF;\n\n  RETURN p::timestamptz;\nEXCEPTION WHEN others THEN\n  RETURN NULL;\nEND;\n$$;\n\n-- 2) Заполняем creation_date из CDM JSON (пробуем несколько путей)\nUPDATE cdm_messages m\nSET creation_date = COALESCE(\n  -- самый частый вариант: header.creation_date\n  safe_timestamptz(m.cdm_json #>> '{header,creation_date}'),\n  safe_timestamptz(m.cdm_json #>> '{header,CREATION_DATE}'),\n\n  -- иногда бывает на верхнем уровне\n  safe_timestamptz(m.cdm_json #>> '{creation_date}'),\n  safe_timestamptz(m.cdm_json #>> '{CREATION_DATE}'),\n\n  -- иногда кладут в metadata\n  safe_timestamptz(m.cdm_json #>> '{metadata,creation_date}'),\n  safe_timestamptz(m.cdm_json #>> '{metadata,CREATION_DATE}'),\n\n  -- запасные варианты (если у тебя другая вложенность)\n  safe_timestamptz(m.cdm_json #>> '{cdm,header,creation_date}'),\n  safe_timestamptz(m.cdm_json #>> '{cdm,header,CREATION_DATE}')\n)\nWHERE m.creation_date IS NULL;\n\n-- 3) (опционально) индекс для сортировки/поиска\nCREATE INDEX IF NOT EXISTS idx_cdm_messages_creation_date\nON cdm_messages (creation_date);",
+        "options": {
+          "queryReplacement": "=$1 = {{$input.all().map(i => i.json)}}\n\n$2 = {{ $json.pair_b }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        592,
+        0
+      ],
+      "id": "a3e44d8e-9f1a-478b-80e6-844fb63fa1d6",
+      "name": "Execute a SQL query4",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "BS3jzABtgD6WMJ0p",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cdm_source_features\nSET creation_date = $1::timestamptz\nWHERE message_id = $2;",
+        "options": {
+          "queryReplacement": "=$1 = {{ $json.cdm_json.creation_date }}'\n\n$2 = {{ $('On form submission2').item.json.message_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        512,
+        304
+      ],
+      "id": "2442bb22-68d5-4357-9e00-49902527a5a0",
+      "name": "Execute a SQL query5",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "BS3jzABtgD6WMJ0p",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node (JavaScript)\n// Extract creation_date from CDM JSON and add creation_date + ts (timestamp) to each item.\n\nfunction asObj(x) {\n  if (x == null) return null;\n  if (typeof x === 'object') return x;\n  if (typeof x === 'string') {\n    try { return JSON.parse(x); } catch { return null; }\n  }\n  return null;\n}\n\nfunction pickCdmJson(row) {\n  // попробуй самые частые названия\n  return (\n    asObj(row.cdm_json) ||\n    asObj(row.payload) ||\n    asObj(row.raw) ||\n    asObj(row.cdm) ||\n    null\n  );\n}\n\nfunction getPath(obj, pathArr) {\n  let cur = obj;\n  for (const k of pathArr) {\n    if (!cur || typeof cur !== 'object') return null;\n    cur = cur[k];\n  }\n  return cur ?? null;\n}\n\nfunction parseDateAny(v) {\n  if (v == null) return null;\n  if (typeof v === 'number') {\n    // если вдруг epoch ms\n    if (v > 1e11) return new Date(v);\n    // epoch seconds\n    if (v > 1e9) return new Date(v * 1000);\n    return null;\n  }\n  const s = v.toString().trim();\n  if (!s) return null;\n\n  // нормальный ISO/Z формат Date.parse понимает\n  const t = Date.parse(s);\n  if (Number.isFinite(t)) return new Date(t);\n\n  // иногда \"YYYY-MM-DD HH:MM:SSZ\" -> заменим пробел на T\n  const s2 = s.replace(' ', 'T');\n  const t2 = Date.parse(s2);\n  if (Number.isFinite(t2)) return new Date(t2);\n\n  return null;\n}\n\nfunction extractCreationDate(cdm) {\n  if (!cdm) return null;\n\n  // самые вероятные пути (CCSDS CDM часто имеет header)\n  const candidates = [\n    ['header', 'creation_date'],\n    ['header', 'CREATION_DATE'],\n    ['creation_date'],\n    ['CREATION_DATE'],\n    ['metadata', 'creation_date'],\n    ['metadata', 'CREATION_DATE'],\n    // запасные варианты, если завернули внутрь\n    ['cdm', 'header', 'creation_date'],\n    ['cdm', 'header', 'CREATION_DATE'],\n  ];\n\n  for (const p of candidates) {\n    const v = getPath(cdm, p);\n    const d = parseDateAny(v);\n    if (d) return d;\n  }\n\n  return null;\n}\n\nconst items = $input.all();\n\nreturn items.map(item => {\n  const row = item.json;\n  const cdm = pickCdmJson(row);\n\n  const d = extractCreationDate(cdm);\n\n  // fallback если creation_date нет: created_at / ingested_at / ts\n  const fallback =\n    parseDateAny(row.created_at) ||\n    parseDateAny(row.ingested_at) ||\n    parseDateAny(row.ts);\n\n  const finalDate = d || fallback || null;\n\n  return {\n    json: {\n      ...row,\n      creation_date: d ? d.toISOString() : null,          // только из CDM\n      creation_ts: d ? d.getTime() : null,\n      ts: finalDate ? finalDate.toISOString() : null,     // универсальный timestamp для сортировки\n      ts_ms: finalDate ? finalDate.getTime() : null,\n      _creation_date_source: d ? 'cdm' : (fallback ? 'fallback' : 'none')\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        304
+      ],
+      "id": "1ed08868-e644-48e4-b7d4-e05d17f67630",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "Select cdm_json\nFROM cdm_messages\nwhere message_id = $1",
+        "options": {
+          "queryReplacement": "=$1 = {{ $json.message_id}}\n$2 = {{ $json.pair_b }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        176,
+        288
+      ],
+      "id": "54ad3d67-e2d9-4983-b171-f2371fa8c306",
+      "name": "Execute a SQL query6",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2fetuh0Apnozq8Vi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "formTitle": "фвфыдвы",
+        "formDescription": "message_id",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "CDM",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        0,
+        0
+      ],
+      "id": "e68afe0c-33c7-47da-b4b1-e8f452c72888",
+      "name": "On form submission3",
+      "webhookId": "c9575d43-2cea-4113-9a15-0f72db0ba36c",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// COV-ONLY DIFF (n8n Code node)\n// INPUT:\n//   либо root.output содержит 2 CDM (строка/объект/массив),\n//   либо приходит 2 items (each = CDM row/object)\n// OUTPUT:\n//   исходный input НЕ трогаем + добавляем analysis.cov_*\n// ВАЖНО: #1 = самый старый, #N = самый новый (по freshness / cdm_n / cdm_label)\n\nfunction safeJsonParse(x) {\n  try { return JSON.parse(x); } catch { return null; }\n}\n\nfunction toNumber(v) {\n  if (v === undefined || v === null) return null;\n\n  // {unit, value}\n  if (typeof v === \"object\") {\n    if (v && Object.prototype.hasOwnProperty.call(v, \"value\")) return toNumber(v.value);\n    return null;\n  }\n\n  if (typeof v === \"number\") return Number.isFinite(v) ? v : null;\n\n  const s = String(v).trim();\n  if (!s) return null;\n  const n = Number(s);\n  return Number.isFinite(n) ? n : null;\n}\n\nfunction pick(obj, keys) {\n  for (const k of keys) if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];\n  return undefined;\n}\n\nfunction pct(oldVal, newVal) {\n  if (oldVal === null || newVal === null) return null;\n  if (oldVal === 0) return null;\n  return ((newVal - oldVal) / oldVal) * 100;\n}\n\nfunction parseOutput(output) {\n  if (output == null) throw new Error(\"output пустой\");\n\n  if (typeof output === \"object\") {\n    if (typeof output.message === \"string\") return JSON.parse(output.message);\n    return output;\n  }\n\n  const s = String(output).trim();\n  const p = JSON.parse(s);\n\n  if (p && typeof p === \"object\" && typeof p.message === \"string\") return JSON.parse(p.message);\n  if (typeof p === \"string\") return JSON.parse(p.trim());\n\n  return p;\n}\n\nfunction getTwoCdms(parsed) {\n  if (Array.isArray(parsed) && parsed.length >= 2) return [parsed[0], parsed[1]];\n  if (parsed && parsed.old && parsed.new) return [parsed.old, parsed.new];\n  if (parsed && Array.isArray(parsed.cdms) && parsed.cdms.length >= 2) return [parsed.cdms[0], parsed.cdms[1]];\n  if (parsed && Array.isArray(parsed.output) && parsed.output.length >= 2) return [parsed.output[0], parsed.output[1]];\n  throw new Error(\"Не нашёл 2 CDM. Нужен формат: [a,b] или {old,new} или {cdms:[..]}/{output:[..]}\");\n}\n\nfunction getCdmId(cdm) {\n  const id = pick(cdm, [\"cdm_id\", \"CDM_ID\", \"id\", \"message_id\", \"messageId\"]);\n  if (id === undefined) throw new Error(\"Не найден CDM id (cdm_id/CDM_ID/id/message_id).\");\n  return String(id);\n}\n\n// freshness: #1 старый, #N новый\nfunction getFreshness(cdm) {\n  const f = pick(cdm, [\"freshness\", \"Freshness\", \"FRESHNESS\", \"cdm_label\", \"cdmLabel\", \"cdm_n\", \"cdmN\"]);\n  if (f === undefined) return null;\n  if (typeof f === \"number\") return `#${f}`;\n  return String(f);\n}\nfunction freshnessRank(f) {\n  const m = String(f ?? \"\").match(/#\\s*(\\d+)/);\n  return m ? Number(m[1]) : null;\n}\nfunction pickOldNewByFreshness(a, b) {\n  const ra = freshnessRank(getFreshness(a));\n  const rb = freshnessRank(getFreshness(b));\n\n  // ТВОЯ СХЕМА: #1 = старый, #N = новый\n  if (ra != null && rb != null) {\n    const oldCdm = ra < rb ? a : b;\n    const newCdm = ra < rb ? b : a;\n    return { oldCdm, newCdm };\n  }\n\n  // fallback: как пришло\n  return { oldCdm: a, newCdm: b };\n}\n\n// --- COVARIANCE (diag pos_pos in RTN): берем 6 чисел (obj1 rr/tt/nn + obj2 rr/tt/nn) ---\nfunction getCovDiag(cdm) {\n  // 1) если CDM уже \"плоский\" (ты уже вытащил c1_rr..c2_nn SQL-ом)\n  const flat = {\n    c1_rr: toNumber(pick(cdm, [\"c1_rr\", \"c1RR\"])),\n    c1_tt: toNumber(pick(cdm, [\"c1_tt\", \"c1TT\"])),\n    c1_nn: toNumber(pick(cdm, [\"c1_nn\", \"c1NN\"])),\n    c2_rr: toNumber(pick(cdm, [\"c2_rr\", \"c2RR\"])),\n    c2_tt: toNumber(pick(cdm, [\"c2_tt\", \"c2TT\"])),\n    c2_nn: toNumber(pick(cdm, [\"c2_nn\", \"c2NN\"]))\n  };\n\n  const flatOk = [flat.c1_rr, flat.c1_tt, flat.c1_nn, flat.c2_rr, flat.c2_tt, flat.c2_nn].every(v => v !== null);\n  if (flatOk) {\n    return {\n      object1: { rr: flat.c1_rr, tt: flat.c1_tt, nn: flat.c1_nn },\n      object2: { rr: flat.c2_rr, tt: flat.c2_tt, nn: flat.c2_nn }\n    };\n  }\n\n  // 2) иначе — парсим из raw cdm_json\n  const cdmJson = cdm?.cdm_json != null\n    ? (typeof cdm.cdm_json === \"string\" ? safeJsonParse(cdm.cdm_json) : cdm.cdm_json)\n    : null;\n\n  const raw = cdmJson || cdm;\n\n  const o1 = raw?.objects?.object1?.covariance_rtn?.pos_pos;\n  const o2 = raw?.objects?.object2?.covariance_rtn?.pos_pos;\n\n  // RTN diag in your CDM: cr_r (R), ct_t (T), cn_n (N)\n  const c1_rr = toNumber(o1?.cr_r);\n  const c1_tt = toNumber(o1?.ct_t);\n  const c1_nn = toNumber(o1?.cn_n);\n\n  const c2_rr = toNumber(o2?.cr_r);\n  const c2_tt = toNumber(o2?.ct_t);\n  const c2_nn = toNumber(o2?.cn_n);\n\n  return {\n    object1: { rr: c1_rr, tt: c1_tt, nn: c1_nn },\n    object2: { rr: c2_rr, tt: c2_tt, nn: c2_nn }\n  };\n}\n\nfunction sqrtPos(x) {\n  if (x === null || x === undefined) return null;\n  if (typeof x !== \"number\") return null;\n  if (!Number.isFinite(x) || x < 0) return null;\n  return Math.sqrt(x);\n}\n\n// агрегируем две диагонали (obj1+obj2) и даём производные\nfunction combineCovDiag(cov) {\n  const rr = (cov.object1.rr === null || cov.object2.rr === null) ? null : (cov.object1.rr + cov.object2.rr);\n  const tt = (cov.object1.tt === null || cov.object2.tt === null) ? null : (cov.object1.tt + cov.object2.tt);\n  const nn = (cov.object1.nn === null || cov.object2.nn === null) ? null : (cov.object1.nn + cov.object2.nn);\n\n  const trace = (rr === null || tt === null || nn === null) ? null : (rr + tt + nn);\n\n  const sigma_r = sqrtPos(rr);\n  const sigma_t = sqrtPos(tt);\n  const sigma_n = sqrtPos(nn);\n\n  const sigma_rss = sqrtPos(trace);\n\n  const sigma_max = (sigma_r == null && sigma_t == null && sigma_n == null)\n    ? null\n    : Math.max(sigma_r ?? -Infinity, sigma_t ?? -Infinity, sigma_n ?? -Infinity);\n\n  return {\n    cov_total_diag_m2: { rr, tt, nn },   // m^2\n    cov_total_trace_m2: trace,          // m^2\n    sigma_1s_m: { r: sigma_r, t: sigma_t, n: sigma_n }, // m\n    sigma_rss_1s_m: sigma_rss,          // m\n    sigma_max_1s_m: sigma_max           // m\n  };\n}\n\nfunction deltaObj(oldObj, newObj) {\n  const out = {};\n  for (const k of Object.keys(oldObj)) {\n    const a = oldObj[k];\n    const b = newObj[k];\n    out[k] = (a === null || b === null) ? null : (b - a);\n  }\n  return out;\n}\nfunction pctObj(oldObj, newObj) {\n  const out = {};\n  for (const k of Object.keys(oldObj)) out[k] = pct(oldObj[k], newObj[k]);\n  return out;\n}\n\n// ---- MAIN ----\nconst all = $input.all();\nif (!all || all.length === 0) throw new Error(\"Вход пустой: нет items.\");\n\nconst root = all[0].json;\nconst pair_key = pick(root, [\"pair_key\", \"pairKey\", \"PAIR_KEY\"]) ?? null;\n\nlet cdmA, cdmB;\n\nif (root.output != null) {\n  const parsed = parseOutput(root.output);\n  [cdmA, cdmB] = getTwoCdms(parsed);\n} else if (all.length >= 2) {\n  cdmA = all[0].json;\n  cdmB = all[1].json;\n} else {\n  throw new Error(\"Нет root.output и меньше 2 items (нужно 2 CDM).\");\n}\n\nconst { oldCdm, newCdm } = pickOldNewByFreshness(cdmA, cdmB);\n\nconst FROM_CDM_ID = getCdmId(oldCdm);\nconst TO_CDM_ID   = getCdmId(newCdm);\n\nconst old_freshness = getFreshness(oldCdm);\nconst new_freshness = getFreshness(newCdm);\n\nconst old_cov_diag_m2 = getCovDiag(oldCdm);\nconst new_cov_diag_m2 = getCovDiag(newCdm);\n\nconst old_cov_total = combineCovDiag(old_cov_diag_m2);\nconst new_cov_total = combineCovDiag(new_cov_diag_m2);\n\nconst cov_delta = {\n  cov_total_diag_m2: deltaObj(old_cov_total.cov_total_diag_m2, new_cov_total.cov_total_diag_m2),\n  cov_total_trace_m2: (old_cov_total.cov_total_trace_m2 === null || new_cov_total.cov_total_trace_m2 === null)\n    ? null\n    : (new_cov_total.cov_total_trace_m2 - old_cov_total.cov_total_trace_m2),\n  sigma_1s_m: deltaObj(old_cov_total.sigma_1s_m, new_cov_total.sigma_1s_m),\n  sigma_rss_1s_m: (old_cov_total.sigma_rss_1s_m === null || new_cov_total.sigma_rss_1s_m === null)\n    ? null\n    : (new_cov_total.sigma_rss_1s_m - old_cov_total.sigma_rss_1s_m),\n  sigma_max_1s_m: (old_cov_total.sigma_max_1s_m === null || new_cov_total.sigma_max_1s_m === null)\n    ? null\n    : (new_cov_total.sigma_max_1s_m - old_cov_total.sigma_max_1s_m)\n};\n\nconst cov_percent_change = {\n  cov_total_diag_m2: pctObj(old_cov_total.cov_total_diag_m2, new_cov_total.cov_total_diag_m2),\n  cov_total_trace_m2: pct(old_cov_total.cov_total_trace_m2, new_cov_total.cov_total_trace_m2),\n  sigma_1s_m: pctObj(old_cov_total.sigma_1s_m, new_cov_total.sigma_1s_m),\n  sigma_rss_1s_m: pct(old_cov_total.sigma_rss_1s_m, new_cov_total.sigma_rss_1s_m),\n  sigma_max_1s_m: pct(old_cov_total.sigma_max_1s_m, new_cov_total.sigma_max_1s_m)\n};\n\nconst out = { ...root };\n\nout.analysis = {\n  pair_key,\n  FROM_CDM_ID,\n  TO_CDM_ID,\n  old_freshness,\n  new_freshness,\n\n  // 1) “сырые” diag по объектам (как ты спрашивал “как будет выглядеть old_values ковариации”)\n  old_cov_diag_m2,\n  new_cov_diag_m2,\n\n  // 2) агрегаты (obj1+obj2) + 1σ\n  old_cov_total,\n  new_cov_total,\n\n  // 3) Δ и %\n  cov_delta,\n  cov_percent_change\n};\n\nreturn [{ json: out }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        304
+      ],
+      "id": "609bd183-2241-4440-8117-c2b44e4be7f3",
+      "name": "update"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE difference d\nSET\n  old_values =\n    (\n      COALESCE(NULLIF(d.old_values, '')::jsonb, '{}'::jsonb)\n      || jsonb_build_object('cov', COALESCE(NULLIF($2::text, '')::jsonb, '{}'::jsonb))\n    )::text,\n\n  new_values =\n    (\n      COALESCE(NULLIF(d.new_values, '')::jsonb, '{}'::jsonb)\n      || jsonb_build_object('cov', COALESCE(NULLIF($3::text, '')::jsonb, '{}'::jsonb))\n    )::text,\n\n  delta =\n    (\n      COALESCE(NULLIF(d.delta, '')::jsonb, '{}'::jsonb)\n      || jsonb_build_object('cov', COALESCE(NULLIF($4::text, '')::jsonb, '{}'::jsonb))\n    )::text,\n\n  delta_ptc =\n    (\n      COALESCE(NULLIF(d.delta_ptc, '')::jsonb, '{}'::jsonb)\n      || jsonb_build_object('cov', COALESCE(NULLIF($5::text, '')::jsonb, '{}'::jsonb))\n    )::text\n\nWHERE trim(d.pair_key) = trim($1::text);",
+        "options": {
+          "queryReplacement": "=$1 = {{ $json.pair_key }}\n$2 ={{ $json.analysis.old_cov_total }}\n$3 = {{ $json.analysis.new_cov_total }}\n$4 ={{ $json.analysis.cov_delta }}\n$5 ={{ $json.analysis.cov_percent_change }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2192,
+        240
+      ],
+      "id": "288bb8f7-a031-49ec-9c92-c522d9cfe945",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "BS3jzABtgD6WMJ0p",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH matched AS (\n  SELECT\n    cdm_json,\n    COALESCE(\n      NULLIF(cdm_json::jsonb->>'creation_date', '')::timestamptz,\n      created_at\n    ) AS sort_ts\n  FROM cdm_messages\n  WHERE\n    (lower(trim(pair_a)) = lower(trim($1)) AND lower(trim(pair_b)) = lower(trim($2)))\n    OR\n    (lower(trim(pair_a)) = lower(trim($2)) AND lower(trim(pair_b)) = lower(trim($1)))\n)\nSELECT cdm_json\nFROM matched\nORDER BY sort_ts DESC\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "=$1 = {{ $json.pair_a }}  \n$2 = {{ $json.pair_b }}\n$3 = {{$json.N  }}\n$4 = {{  $json[' SECOND N'] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1360,
+        96
+      ],
+      "id": "c7127307-d16a-49eb-8436-57f1c7a3a6b0",
+      "name": "Execute a SQL query7",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "QYLEYG73zSKxPF8q",
+          "name": "Postgres account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "тут все нужные правила",
+        "tableName": "calculus_casecard",
+        "topK": 2,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        1296,
+        832
+      ],
+      "id": "74062581-627c-4d12-99dc-c97de1b4a842",
+      "name": "CASECARDSTORE",
+      "credentials": {
+        "postgres": {
+          "id": "BS3jzABtgD6WMJ0p",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "4rwNOFZXD0xQnTNN",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/4rwNOFZXD0xQnTNN",
+          "cachedResultName": "major"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "main_pair_key": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('main_pair_key', ``, 'string') }}"
+          },
+          "matchingColumns": [
+            "main_pair_key"
+          ],
+          "schema": [
+            {
+              "id": "main_pair_key",
+              "displayName": "main_pair_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1168,
+        864
+      ],
+      "id": "ef131ab7-5c42-4ca3-a3fd-72ce36d3e642",
+      "name": "Call 'major'"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "there is a rules",
+        "tableName": "rules_calculus",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        1248,
+        688
+      ],
+      "id": "e2d64eb5-8e43-4882-8028-7a7da4384e8e",
+      "name": "postgress pg vector store",
+      "credentials": {
+        "postgres": {
+          "id": "BS3jzABtgD6WMJ0p",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "adad",
+        "subject": "asdas",
+        "message": "adadsd",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1296,
+        240
+      ],
+      "id": "30b26837-a775-4339-824d-115326ffd5b7",
+      "name": "Send a message",
+      "webhookId": "f90e72a4-c519-40f1-b6c7-c1cbb08dcc1d"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        576,
+        624
+      ],
+      "id": "19e5ff19-43bb-42ca-ad2c-790697a06b75",
+      "name": "When chat message received",
+      "webhookId": "1ef28db9-76b5-4344-af9f-a3c1699fa5d3",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "hguT2Sryruopkn1x",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/hguT2Sryruopkn1x",
+          "cachedResultName": "case-finder_base"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "main_pair_key": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('main_pair_key', ``, 'string') }}",
+            "pairs_key": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pairs_key', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "main_pair_key",
+              "displayName": "main_pair_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "pairs_key",
+              "displayName": "pairs_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        832,
+        880
+      ],
+      "id": "06945e18-2386-4154-9213-f027aff7c93b",
+      "name": "Call 'case-finder_base'"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "V4BIUf7fHDt4L0mu",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/V4BIUf7fHDt4L0mu",
+          "cachedResultName": "AI FEASIBILLITY"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        944,
+        880
+      ],
+      "id": "76eaa760-2c62-48d6-8897-cf674d5e092c",
+      "name": "Call 'AI FEASIBILLITY'"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Postgres PGVector Store1",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Postgres PGVector Store1",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "CASECARDSTORE",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "postgress pg vector store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Postgres PGVector Store1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pair_key": {
+      "main": [
+        [
+          {
+            "node": "update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission1": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query3": {
+      "main": [
+        [
+          {
+            "node": "pair_key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission2": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query6": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CASECARDSTORE": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "postgress pg vector store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'chart'": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'major'": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'case-finder_base'": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'AI FEASIBILLITY'": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "c888c448-933c-4188-8f88-dccfd05d96dd",
+  "meta": {
+    "instanceId": "b4ea4ca9c3070f4ac2566f1d5b9e37f48c892a17b88ab52397ad078af0d98bdb"
+  },
+  "id": "7V4Js1kascPebMrd",
+  "tags": []
+}

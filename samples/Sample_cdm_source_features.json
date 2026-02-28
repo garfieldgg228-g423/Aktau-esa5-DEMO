@@ -1,0 +1,19 @@
+{
+  "pair_key": 540074022,
+  "provider": "MURZ",
+  "signature": "AKTAU-OPS|LEOLAB|SATCAT|EPHEM-AKTAU-NEO-1-20250702|EPHEM-CASPIAN-LX2-20250702|CALCULATED",
+  "catalogs": [
+    "LEOLAB",
+    "SATCAT"
+  ],
+  "ephemeris": [
+    "EPHEM-AKTAU-NEO-1-20250702",
+    "EPHEM-CASPIAN-LX2-20250702"
+  ],
+  "covariance_methods": [
+    "CALCULATED"
+  ],
+  "maneuverable": true,
+  "object_type_pair": "PAYLOAD-PAYLOAD",
+  "dominant_miss_axis_ric": "C"
+}

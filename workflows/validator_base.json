@@ -1,0 +1,134 @@
+{
+  "name": "validator_base",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "object_name_one"
+            },
+            {
+              "name": "CDM_ID"
+            },
+            {
+              "name": "object_name_two"
+            }
+          ]
+        }
+      },
+      "id": "2b800502-8a08-49d0-b013-65495e14d1c6",
+      "typeVersion": 1.1,
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -336,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "formTitle": "CDM INFO",
+        "formDescription": "send info",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "adfads",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        -432,
+        208
+      ],
+      "id": "26247b7b-b695-4165-8369-70fdafb0d081",
+      "name": "On form submission",
+      "webhookId": "d9a00eed-53a8-40c8-811e-8a0be6c6ccf3"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, created_at, message_id,  cdm_json, creation_date \nFROM cdm_messages\nWhere message_id = $1\n  ORDER BY id DESC\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "=$1 =  {{ $json.CDM_ID }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "id": "acc5815b-a90a-4040-9a23-e895d85c09b7",
+      "name": "Execute a SQL query",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2fetuh0Apnozq8Vi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, creation_date, message_id \nfrom cdm_messages\nWhere pair_a = LEAST($1,$2) AND pair_B = GREATEST($1,$2)\nORDER BY creation_date DESC;",
+        "options": {
+          "queryReplacement": "=$1= {{ $json.object_name_one }}\n$2 = {{ $json.object_name_two }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -32,
+        208
+      ],
+      "id": "95f13581-b22e-442f-901d-a500b7cb13be",
+      "name": "Execute a SQL query1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2fetuh0Apnozq8Vi",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "cb0ba071-2dd0-4d7a-823f-31853d663957",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b4ea4ca9c3070f4ac2566f1d5b9e37f48c892a17b88ab52397ad078af0d98bdb"
+  },
+  "id": "uIOFK0aDVoStOTyS",
+  "tags": []
+}

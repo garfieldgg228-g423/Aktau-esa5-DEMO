@@ -1,0 +1,224 @@
+{
+  "name": "major",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "Select cdm_json\nFROM cdm_messages\nwhere\n  least(upper(trim(pair_a)), upper(trim(pair_b))) =\n  least(upper(trim($1)), upper(trim($2)))\nand\n  greatest(upper(trim(pair_a)), upper(trim(pair_b))) =\n  greatest(upper(trim($1)), upper(trim($2)))\norder by coalesce(nullif(creation_date,'')::timestamptz, created_at) desc",
+        "options": {
+          "queryReplacement": "=$1 = {{ $json.pair_a }}  \n$2 = {{ $json.pair_b }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "id": "59c34bc8-b13a-498e-a6d2-f53260d4e157",
+      "name": "Execute a SQL query2",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2fetuh0Apnozq8Vi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node (JavaScript)\n// Input: item.json = CDM OR item.json.cdm_json = CDM (object or JSON string)\n// Output: json.source_family + json.maneuverable + json.object_type_pair + json.dominant_miss_axis_ric\n\nfunction asObject(maybeJson) {\n  if (maybeJson == null) return null;\n  if (typeof maybeJson === \"object\") return maybeJson;\n  if (typeof maybeJson === \"string\") {\n    try { return JSON.parse(maybeJson); } catch { return null; }\n  }\n  return null;\n}\n\nfunction pickFirst(obj, keys) {\n  for (const k of keys) {\n    if (obj && obj[k] != null && obj[k] !== \"\") return obj[k];\n  }\n  return null;\n}\n\nfunction uniqNonEmpty(arr) {\n  return [...new Set(arr.filter(v => v != null && v !== \"\"))];\n}\n\nfunction normalizeBool(val) {\n  if (val === true) return true;\n  if (val === false) return false;\n  return null; // unknown\n}\n\nfunction boolToTFU(val) {\n  if (val === true) return \"true\";\n  if (val === false) return \"false\";\n  return \"unknown\";\n}\n\nfunction normalizeObjectType(raw) {\n  if (!raw) return \"unknown\";\n  const s = String(raw).trim().toUpperCase();\n\n  // CCSDS-ish / SATCAT-ish variants\n  if (s.includes(\"PAYLOAD\")) return \"payload\";\n  if (s.includes(\"DEBRIS\")) return \"debris\";\n  if (s.includes(\"ROCKET\") || s.includes(\"R/B\") || s.includes(\"RB\") || s.includes(\"BODY\")) return \"rocket body\";\n  if (s.includes(\"UNKNOWN\")) return \"unknown\";\n\n  // fallback\n  return String(raw).trim().toLowerCase();\n}\n\nfunction canonicalPairLabel(a, b, sep = \"–\") {\n  const A = a ?? \"unknown\";\n  const B = b ?? \"unknown\";\n  return [A, B].sort((x, y) => x.localeCompare(y)).join(sep);\n}\n\nfunction dominantAxisRICFromRTN(relPosRTN) {\n  // relPosRTN expected keys: r, t, n (meters)\n  if (!relPosRTN || typeof relPosRTN !== \"object\") return \"unknown\";\n\n  const r = Number(relPosRTN.r);\n  const t = Number(relPosRTN.t);\n  const n = Number(relPosRTN.n);\n\n  if (![r, t, n].every(v => Number.isFinite(v))) return \"unknown\";\n\n  const ar = Math.abs(r), at = Math.abs(t), an = Math.abs(n);\n  const max = Math.max(ar, at, an);\n\n  if (max === 0) return \"unknown\";\n\n  // tie protection: если разница между top-2 < 1% — считаем неопределённым\n  const sorted = [ar, at, an].sort((a, b) => b - a);\n  if (sorted[1] / sorted[0] > 0.99) return \"unknown\";\n\n  // RTN -> RIC mapping:\n  // r (radial) -> R\n  // t (along-track) -> I\n  // n (cross-track) -> C\n  if (max === ar) return \"R\";\n  if (max === at) return \"I\";\n  if (max === an) return \"C\";\n  return \"unknown\";\n}\n\nconst items = $input.all();\n\nreturn items.map((item) => {\n  const cdm = asObject(item.json?.cdm_json) ?? asObject(item.json) ?? {};\n\n  // provider: обычно originator (у тебя \"SKIBIDI\")\n  const provider = pickFirst(cdm, [\"provider\", \"originator\", \"source\", \"message_originator\"]);\n\n  const objects = (cdm && typeof cdm === \"object\" && cdm.objects && typeof cdm.objects === \"object\")\n    ? cdm.objects\n    : {};\n\n  // ожидаем object1/object2, но код не зависит от имён ключей\n  const objEntries = Object.entries(objects);\n\n  const byObject = {};\n  const allCatalogs = [];\n  const allEphemeris = [];\n  const allCovMethods = [];\n  const maneuverables = [];\n  const objectTypes = [];\n\n  for (const [objKey, objVal] of objEntries) {\n    const md = objVal?.metadata ?? {};\n\n    const catalog_name = md?.catalog_name ?? null;\n    const ephemeris_name = md?.ephemeris_name ?? null;\n    const covariance_method = md?.covariance_method ?? null;\n\n    const maneuverableRaw = normalizeBool(md?.maneuverable);\n    const maneuverableTFU = boolToTFU(maneuverableRaw);\n\n    const object_type_norm = normalizeObjectType(md?.object_type);\n\n    byObject[objKey] = {\n      object: md?.object ?? objKey,\n      object_name: md?.object_name ?? null,\n      object_type_raw: md?.object_type ?? null,\n      object_type: object_type_norm,\n      maneuverable: maneuverableTFU,\n      catalog_name,\n      ephemeris_name,\n      covariance_method,\n    };\n\n    allCatalogs.push(catalog_name);\n    allEphemeris.push(ephemeris_name);\n    allCovMethods.push(covariance_method);\n    maneuverables.push(maneuverableRaw);\n    objectTypes.push(object_type_norm);\n  }\n\n  // maneuverable по паре: true/false/unknown (если смешано или не хватает данных — unknown)\n  let maneuverable_pair = \"unknown\";\n  if (maneuverables.length >= 2) {\n    const a = maneuverables[0], b = maneuverables[1];\n    if (a === true && b === true) maneuverable_pair = \"true\";\n    else if (a === false && b === false) maneuverable_pair = \"false\";\n    else maneuverable_pair = \"unknown\"; // mixed/unknown\n  } else if (maneuverables.length === 1) {\n    maneuverable_pair = boolToTFU(maneuverables[0]);\n  }\n\n  // object type pair (канонический, чтобы порядок не шумел)\n  const object_type_pair = canonicalPairLabel(objectTypes[0] ?? \"unknown\", objectTypes[1] ?? \"unknown\");\n\n  // dominant miss-vector axis (RIC) from relative_position_rtn_m\n  const relPosRTN = cdm?.relative_metadata_data?.relative_position_rtn_m ?? null;\n  const dominant_miss_axis_ric = dominantAxisRICFromRTN(relPosRTN);\n\n  const source_family = {\n    provider,\n    catalogs: uniqNonEmpty(allCatalogs),\n    ephemeris: uniqNonEmpty(allEphemeris),\n    covariance_methods: uniqNonEmpty(allCovMethods),\n\n    signature: [\n      provider ?? \"NA\",\n      ...uniqNonEmpty(allCatalogs),\n      ...uniqNonEmpty(allEphemeris),\n      ...uniqNonEmpty(allCovMethods),\n    ].join(\"|\"),\n  };\n\n  return {\n    json: {\n      message_id: cdm?.message_id ?? null,\n      creation_date: cdm?.creation_date ?? null,\n      ccsds_cdm_vers: cdm?.ccsds_cdm_vers ?? null,\n\n      source_family,\n      source_family_by_object: byObject,\n\n      maneuverable: maneuverable_pair,\n      maneuverable_by_object: Object.fromEntries(\n        Object.entries(byObject).map(([k, v]) => [k, v.maneuverable])\n      ),\n\n      object_type_pair,\n      dominant_miss_axis_ric,\n    },\n  };\n});\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "f46a1b18-af17-4245-86be-f6c7594f6604",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with rows as (\n  select value as j\n  from jsonb_array_elements(\n    case\n      when jsonb_typeof($1::jsonb) = 'array' then $1::jsonb\n      else jsonb_build_array($1::jsonb)\n    end\n  ) as value\n),\nx as (\n  select\n    nullif(j->>'message_id','') as message_id,\n\n    j->'source_family'->>'provider'  as provider,\n    j->'source_family'->>'signature' as signature,\n\n    case\n      when jsonb_typeof(j->'source_family'->'catalogs') = 'array'\n        then coalesce(\n          (select array_agg(v) from jsonb_array_elements_text(j->'source_family'->'catalogs') as v),\n          '{}'::text[]\n        )\n      else '{}'::text[]\n    end as catalogs,\n\n    case\n      when jsonb_typeof(j->'source_family'->'ephemeris') = 'array'\n        then coalesce(\n          (select array_agg(v) from jsonb_array_elements_text(j->'source_family'->'ephemeris') as v),\n          '{}'::text[]\n        )\n      else '{}'::text[]\n    end as ephemeris,\n\n    case\n      when jsonb_typeof(j->'source_family'->'covariance_methods') = 'array'\n        then coalesce(\n          (select array_agg(v) from jsonb_array_elements_text(j->'source_family'->'covariance_methods') as v),\n          '{}'::text[]\n        )\n      else '{}'::text[]\n    end as covariance_methods,\n\n    coalesce(j->>'maneuverable','unknown') as maneuverable,\n    j->>'object_type_pair' as object_type_pair,\n    coalesce(j->>'dominant_miss_axis_ric','unknown') as dominant_miss_axis_ric,\n\n    -- object1 (без obj1_object)\n    j->'source_family_by_object'->'object1'->>'object_name'      as obj1_object_name,\n    j->'source_family_by_object'->'object1'->>'object_type_raw'  as obj1_object_type_raw,\n    j->'source_family_by_object'->'object1'->>'object_type'      as obj1_object_type,\n    coalesce(\n      j->'maneuverable_by_object'->>'object1',\n      j->'source_family_by_object'->'object1'->>'maneuverable',\n      'unknown'\n    ) as obj1_maneuverable,\n    j->'source_family_by_object'->'object1'->>'catalog_name'      as obj1_catalog_name,\n    j->'source_family_by_object'->'object1'->>'ephemeris_name'    as obj1_ephemeris_name,\n    j->'source_family_by_object'->'object1'->>'covariance_method' as obj1_covariance_method,\n\n    -- object2 (без obj2_object и без obj2_ephemeris_name)\n    j->'source_family_by_object'->'object2'->>'object_name'      as obj2_object_name,\n    j->'source_family_by_object'->'object2'->>'object_type_raw'  as obj2_object_type_raw,\n    j->'source_family_by_object'->'object2'->>'object_type'      as obj2_object_type,\n    coalesce(\n      j->'maneuverable_by_object'->>'object2',\n      j->'source_family_by_object'->'object2'->>'maneuverable',\n      'unknown'\n    ) as obj2_maneuverable,\n    j->'source_family_by_object'->'object2'->>'catalog_name'      as obj2_catalog_name,\n    j->'source_family_by_object'->'object2'->>'covariance_method' as obj2_covariance_method,\n\n    j->'source_family_by_object' as source_family_by_object,\n    j->'maneuverable_by_object'  as maneuverable_by_object\n\n  from rows\n  where nullif(j->>'message_id','') is not null\n)\ninsert into cdm_source_features (\n  message_id,\n  provider, signature,\n  catalogs, ephemeris, covariance_methods,\n  maneuverable, object_type_pair, dominant_miss_axis_ric,\n\n  obj1_object_name, obj1_object_type_raw, obj1_object_type, obj1_maneuverable, obj1_catalog_name, obj1_ephemeris_name, obj1_covariance_method,\n  obj2_object_name, obj2_object_type_raw, obj2_object_type, obj2_maneuverable, obj2_catalog_name, obj2_covariance_method,\n\n  source_family_by_object, maneuverable_by_object,\n  updated_at\n)\nselect\n  message_id,\n  provider, signature,\n  catalogs, ephemeris, covariance_methods,\n  maneuverable, object_type_pair, dominant_miss_axis_ric,\n\n  obj1_object_name, obj1_object_type_raw, obj1_object_type, obj1_maneuverable, obj1_catalog_name, obj1_ephemeris_name, obj1_covariance_method,\n  obj2_object_name, obj2_object_type_raw, obj2_object_type, obj2_maneuverable, obj2_catalog_name, obj2_covariance_method,\n\n  source_family_by_object, maneuverable_by_object,\n  now()\nfrom x\non conflict (message_id) do update set\n  provider = coalesce(excluded.provider, cdm_source_features.provider),\n  signature = coalesce(excluded.signature, cdm_source_features.signature),\n  catalogs = coalesce(excluded.catalogs, cdm_source_features.catalogs),\n  ephemeris = coalesce(excluded.ephemeris, cdm_source_features.ephemeris),\n  covariance_methods = coalesce(excluded.covariance_methods, cdm_source_features.covariance_methods),\n  maneuverable = coalesce(excluded.maneuverable, cdm_source_features.maneuverable),\n  object_type_pair = coalesce(excluded.object_type_pair, cdm_source_features.object_type_pair),\n  dominant_miss_axis_ric = coalesce(excluded.dominant_miss_axis_ric, cdm_source_features.dominant_miss_axis_ric),\n\n  obj1_object_name = coalesce(excluded.obj1_object_name, cdm_source_features.obj1_object_name),\n  obj1_object_type_raw = coalesce(excluded.obj1_object_type_raw, cdm_source_features.obj1_object_type_raw),\n  obj1_object_type = coalesce(excluded.obj1_object_type, cdm_source_features.obj1_object_type),\n  obj1_maneuverable = coalesce(excluded.obj1_maneuverable, cdm_source_features.obj1_maneuverable),\n  obj1_catalog_name = coalesce(excluded.obj1_catalog_name, cdm_source_features.obj1_catalog_name),\n  obj1_ephemeris_name = coalesce(excluded.obj1_ephemeris_name, cdm_source_features.obj1_ephemeris_name),\n  obj1_covariance_method = coalesce(excluded.obj1_covariance_method, cdm_source_features.obj1_covariance_method),\n\n  obj2_object_name = coalesce(excluded.obj2_object_name, cdm_source_features.obj2_object_name),\n  obj2_object_type_raw = coalesce(excluded.obj2_object_type_raw, cdm_source_features.obj2_object_type_raw),\n  obj2_object_type = coalesce(excluded.obj2_object_type, cdm_source_features.obj2_object_type),\n  obj2_maneuverable = coalesce(excluded.obj2_maneuverable, cdm_source_features.obj2_maneuverable),\n  obj2_catalog_name = coalesce(excluded.obj2_catalog_name, cdm_source_features.obj2_catalog_name),\n  obj2_covariance_method = coalesce(excluded.obj2_covariance_method, cdm_source_features.obj2_covariance_method),\n\n  source_family_by_object = coalesce(excluded.source_family_by_object, cdm_source_features.source_family_by_object),\n  maneuverable_by_object = coalesce(excluded.maneuverable_by_object, cdm_source_features.maneuverable_by_object),\n  updated_at = now();",
+        "options": {
+          "queryReplacement": "=$1 = {{$input.all().map(i => i.json)}}\n$2 = {{ $json.pair_b }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        448,
+        0
+      ],
+      "id": "243de97c-640d-4612-81ff-badacfb8c5b9",
+      "name": "Execute a SQL query4",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "BS3jzABtgD6WMJ0p",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "main_pair_key"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -224,
+        176
+      ],
+      "id": "78bf9c68-d491-459c-bf72-ec65a0ba9339",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select message_id, provider, catalogs,  object_type_pair, dominant_miss_axis_ric, obj1_object_name, obj2_object_name, maneuverable_by_object, covariance_methods, pair_key, creation_date\nfrom cdm_source_features\n",
+        "options": {
+          "queryReplacement": "=$1 = {{ $json.pair_a }}  \n$2 = {{ $json.pair_b }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        304,
+        160
+      ],
+      "id": "2b1e5817-28b5-42bf-b1d6-1c7e7307f28c",
+      "name": "Execute a SQL query",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "BS3jzABtgD6WMJ0p",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node (JavaScript)\n\nconst rows = $input.all().map(i => i.json);\n\n// настройки\nconst FAIL_ON_MISMATCH = false;   // true = бросать ошибку, если есть несовпадения внутри group (stable)\nconst OUTPUT_ONLY_BAD = false;    // true = выводить только pair_key где ok=false\n\n// helpers\nconst dashNormalize = (s) => String(s ?? '')\n  .replace(/[\\u2010\\u2011\\u2012\\u2013\\u2014\\u2212]/g, '-') // разные тире -> '-'\n  .trim();\n\nconst normStr = (s) => dashNormalize(s).toUpperCase();\nconst normProvider = (p) => {\n  const x = normStr(p);\n  return x ? x : 'UNKNOWN';\n};\n\nconst normArrSet = (a) => {\n  if (!Array.isArray(a)) return [];\n  const set = new Set(a.map(x => normStr(x)).filter(Boolean));\n  return Array.from(set).sort(); // порядок не важен\n};\n\nconst normBool = (v) => {\n  if (typeof v === 'boolean') return v;\n  const s = String(v ?? '').trim().toLowerCase();\n  if (s === 'true' || s === '1' || s === 'yes') return true;\n  if (s === 'false' || s === '0' || s === 'no') return false;\n  return null;\n};\n\nconst normManeuverable = (m) => ({\n  object1: normBool(m?.object1),\n  object2: normBool(m?.object2),\n});\n\nconst normObjTypePair = (s) => dashNormalize(s).toLowerCase().replace(/\\s+/g, ' ').trim();\nconst normAxis = (a) => {\n  const s = normStr(a);\n  return s || null;\n};\n\nconst stableComparable = (r) => ({\n  provider: normProvider(r.provider),\n  catalogs: normArrSet(r.catalogs),\n  object_type_pair: normObjTypePair(r.object_type_pair),\n  dominant_miss_axis_ric: normAxis(r.dominant_miss_axis_ric),\n  maneuverable_by_object: normManeuverable(r.maneuverable_by_object),\n  covariance_methods: normArrSet(r.covariance_methods),\n});\n\nconst stableSig = (x) => JSON.stringify(x);\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\n// === main_pair_key приходит из \"When Executed by Another Workflow\" ===\nconst mainPairKey = String(\n  $('When Executed by Another Workflow').first().json.main_pair_key ?? ''\n).trim();\n\nif (!mainPairKey) {\n  return [{\n    json: { ok: false, reason: 'missing_main_pair_key', hint: 'main_pair_key пустой/не пришёл из триггер-ноды' }\n  }];\n}\n\n// provider и stable-эталон берём ТОЛЬКО у строк main_pair_key\nconst mainRows = rows.filter(r => String(r.pair_key ?? '').trim() === mainPairKey);\n\nif (mainRows.length === 0) {\n  const available = Array.from(new Set(rows.map(r => String(r.pair_key ?? '').trim()))).filter(Boolean);\n  return [{\n    json: {\n      ok: false,\n      reason: 'main_pair_key_not_present_in_rows',\n      main_pair_key: mainPairKey,\n      available_pair_keys: available,\n    }\n  }];\n}\n\n// строим норм-группу main\nconst mainNorm = mainRows.map(r => ({\n  pair_key: mainPairKey,\n  message_id: String(r.message_id ?? ''),\n  creation_date: String(r.creation_date ?? ''),\n  stable: stableComparable(r),\n}));\n\nconst mainRef = mainNorm[0];\nconst mainRefSig = stableSig(mainRef.stable);\n\n// проверяем консистентность stable внутри main_pair_key\nconst mainInternalMismatches = [];\nfor (let i = 0; i < mainNorm.length; i++) {\n  const cur = mainNorm[i];\n  if (stableSig(cur.stable) !== mainRefSig) {\n    mainInternalMismatches.push({\n      at_index: i,\n      message_id: cur.message_id,\n      creation_date: cur.creation_date,\n      ref: mainRef.stable,\n      got: cur.stable,\n    });\n  }\n}\nif (mainInternalMismatches.length > 0) {\n  return [{\n    json: {\n      ok: false,\n      reason: 'inconsistent_stable_within_main_pair_key',\n      main_pair_key: mainPairKey,\n      main_provider: mainRef.stable.provider,\n      mismatches: mainInternalMismatches,\n    }\n  }];\n}\n\nconst mainStable = mainRef.stable;\nconst mainProvider = mainStable.provider;\n\n// group by pair_key\nconst byPair = new Map();\nfor (const r of rows) {\n  const k = String(r.pair_key ?? '').trim();\n  if (!byPair.has(k)) byPair.set(k, []);\n  byPair.get(k).push(r);\n}\n\nlet mismatchCount = 0;\nconst out = [];\n\nfor (const [pair_key, group] of byPair.entries()) {\n  const normGroup = group.map(r => ({\n    pair_key,\n    message_id: String(r.message_id ?? ''),\n    creation_date: String(r.creation_date ?? ''),\n    stable: stableComparable(r),\n  }));\n\n  const ref = normGroup[0];\n  const groupProvider = ref.stable.provider;\n\n  // 1) provider должен совпасть с main_provider\n  if (groupProvider !== mainProvider) {\n    const record = {\n      pair_key,\n      count: group.length,\n      ok: false,\n      reason: 'provider_mismatch_to_main',\n      main_pair_key: mainPairKey,\n      main_provider: mainProvider,\n      group_provider: groupProvider,\n      main_reference_stable_fields: mainStable,\n      group_reference_stable_fields: ref.stable,\n      mismatches_within_group: [],\n      mismatches_to_main: [{\n        field: 'provider',\n        ref: mainProvider,\n        got: groupProvider,\n      }],\n    };\n    if (!OUTPUT_ONLY_BAD || !record.ok) out.push(record);\n    continue;\n  }\n\n  // 2) консистентность stable внутри group (как у тебя было)\n  const refSig = stableSig(ref.stable);\n  const mismatchesWithin = [];\n  for (let i = 0; i < normGroup.length; i++) {\n    const cur = normGroup[i];\n    if (stableSig(cur.stable) !== refSig) {\n      mismatchesWithin.push({\n        at_index: i,\n        message_id: cur.message_id,\n        creation_date: cur.creation_date,\n        ref: ref.stable,\n        got: cur.stable,\n      });\n    }\n  }\n\n  // 3) сравнение stable group vs stable main (MAJOR match)\n  const mismatchesToMain = [];\n\n  if (!deepEq(ref.stable.catalogs, mainStable.catalogs)) {\n    mismatchesToMain.push({ field: 'catalogs', ref: mainStable.catalogs, got: ref.stable.catalogs });\n  }\n  if (!deepEq(ref.stable.covariance_methods, mainStable.covariance_methods)) {\n    mismatchesToMain.push({ field: 'covariance_methods', ref: mainStable.covariance_methods, got: ref.stable.covariance_methods });\n  }\n  if (ref.stable.object_type_pair !== mainStable.object_type_pair) {\n    mismatchesToMain.push({ field: 'object_type_pair', ref: mainStable.object_type_pair, got: ref.stable.object_type_pair });\n  }\n  if (ref.stable.dominant_miss_axis_ric !== mainStable.dominant_miss_axis_ric) {\n    mismatchesToMain.push({ field: 'dominant_miss_axis_ric', ref: mainStable.dominant_miss_axis_ric, got: ref.stable.dominant_miss_axis_ric });\n  }\n  if (!deepEq(ref.stable.maneuverable_by_object, mainStable.maneuverable_by_object)) {\n    mismatchesToMain.push({ field: 'maneuverable_by_object', ref: mainStable.maneuverable_by_object, got: ref.stable.maneuverable_by_object });\n  }\n\n  const ok = (mismatchesWithin.length === 0) && (mismatchesToMain.length === 0);\n  if (!ok) mismatchCount += (mismatchesWithin.length + mismatchesToMain.length);\n\n  const record = {\n    pair_key,\n    count: group.length,\n    ok,\n    main_pair_key: mainPairKey,\n    main_provider: mainProvider,\n    group_provider: groupProvider,\n    main_reference_stable_fields: mainStable,\n    group_reference_stable_fields: ref.stable,\n    mismatches_within_group: mismatchesWithin,\n    mismatches_to_main: mismatchesToMain,\n  };\n\n  if (!OUTPUT_ONLY_BAD || !ok) out.push(record);\n}\n\nif (FAIL_ON_MISMATCH && mismatchCount > 0) {\n  throw new Error(`Stable-field mismatches found: ${mismatchCount}`);\n}\n\nreturn out.map(x => ({ json: x }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        144
+      ],
+      "id": "19c2dfb2-01dd-49cd-86eb-e9f5ef12d1eb",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "formTitle": "фывфы",
+        "formDescription": "фвыфвыф",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "pair_a",
+              "fieldType": "textarea"
+            },
+            {
+              "fieldLabel": "pair_b",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        -208,
+        16
+      ],
+      "id": "0a525924-aa4d-4001-8248-b7d4c71bea32",
+      "name": "On form submission",
+      "webhookId": "de82cb77-bc67-44ec-9682-f4a7133b04f9"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute a SQL query2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "9859f31d-160f-4798-9f36-97102d473e8c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b4ea4ca9c3070f4ac2566f1d5b9e37f48c892a17b88ab52397ad078af0d98bdb"
+  },
+  "id": "4rwNOFZXD0xQnTNN",
+  "tags": []
+}
